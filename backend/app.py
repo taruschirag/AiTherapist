@@ -18,6 +18,7 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
+
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 logging.basicConfig(
@@ -58,6 +59,14 @@ class Goals(BaseModel):
 class GoalsJournalsRequest(BaseModel):
     goals: Goals
     journal: str
+
+class Message(BaseModel):
+    role: str
+    content: str
+
+class ChatMessage(BaseModel):
+    message: str
+    context: Optional[str] = None
 
 # Helper Functions
 
@@ -124,6 +133,7 @@ Focus on emotional patterns, behavioral trends, and potential areas for developm
                 {"role": "system", "content": "You are an empathetic AI therapist."},
                 {"role": "user", "content": prompt}
             ],
+            
             max_tokens=1000
         )
         logger.info("Received response from OpenAI")
@@ -222,7 +232,84 @@ async def get_insights():
         logger.exception("Error retrieving insights")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/chat-history")
+async def get_chat_history():
+    user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
+    try:
+        response = supabase.table("ChatHistory") \
+            .select("*") \
+            .eq("user_id", user_id) \
+            .order("created_at", asc=True) \
+            .execute()
+        
+        return {"messages": response.data}
+    except Exception as e:
+        logger.exception("Error retrieving chat history")
+        raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/chat")
+async def chat(message: ChatMessage):
+    user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
+    try:
+        # Get recent chat history
+        chat_history = supabase.table("ChatHistory") \
+            .select("*") \
+            .eq("user_id", user_id) \
+            .order("created_at", desc=True) \
+            .limit(10) \
+            .execute()
+        
+        # Format chat history for OpenAI
+        messages = [
+            {"role": "system", "content": """You are an empathetic AI therapist. 
+            Use the provided context about the user's journal entries and previous chat
+            to give thoughtful, therapeutic responses. Focus on being supportive while
+            maintaining professional boundaries. Avoid giving medical advice."""}
+        ]
+        
+        # Add context if provided
+        if message.context:
+            messages.append({"role": "system", "content": f"Context from user's journal entries and goals: {message.context}"})
+        
+        # Add chat history
+        for chat in reversed(chat_history.data):
+            messages.append({"role": chat['role'], "content": chat['content']})
+        
+        # Add user's new message
+        messages.append({"role": "user", "content": message.message})
+        
+        # Get response from OpenAI
+        client = openai.OpenAI()
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=messages,
+            max_tokens=1000
+        )
+        
+        ai_response = response.choices[0].message.content
+        
+        # Save user message to database
+        supabase.table("ChatHistory").insert({
+            "user_id": user_id,
+            "role": "user",
+            "content": message.message,
+            "created_at": datetime.utcnow().isoformat()
+        }).execute()
+        
+        # Save AI response to database
+        supabase.table("ChatHistory").insert({
+            "user_id": user_id,
+            "role": "assistant",
+            "content": ai_response,
+            "created_at": datetime.utcnow().isoformat()
+        }).execute()
+        
+        return {"response": ai_response}
+        
+    except Exception as e:
+        logger.exception("Error in chat endpoint")
+        raise HTTPException(status_code=500, detail=str(e))
+        
 @app.get("/")
 def health_check():
     logger.info("Health check endpoint hit")

@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import "./index.css";
 
 function App() {
   const [yearlyGoal, setYearlyGoal] = useState("");
@@ -7,32 +8,48 @@ function App() {
   const [journal, setJournal] = useState("");
   const [insights, setInsights] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [currentMessage, setCurrentMessage] = useState("");
+  const [isChatting, setIsChatting] = useState(false);
+  const chatEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [chatMessages]);
+
+  const fetchChatHistory = async () => {
+    try {
+      const response = await fetch("http://127.0.0.1:8000/api/chat-history");
+      if (response.ok) {
+        const data = await response.json();
+        setChatMessages(data.messages);
+      }
+    } catch (error) {
+      console.error("Error fetching chat history:", error);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     const data = {
-      goals: {
-        yearly: yearlyGoal,
-        monthly: monthlyGoal,
-        weekly: weeklyGoal,
-      },
+      goals: { yearly: yearlyGoal, monthly: monthlyGoal, weekly: weeklyGoal },
       journal: journal,
     };
 
     try {
       const response = await fetch("http://127.0.0.1:8000/api/goals-journals", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
 
       if (response.ok) {
         const result = await response.json();
-        alert(result.message); // Display success message
-        // Clear form after successful submission
+        alert(result.message);
         setYearlyGoal("");
         setMonthlyGoal("");
         setWeeklyGoal("");
@@ -51,16 +68,13 @@ function App() {
     try {
       const response = await fetch("http://127.0.0.1:8000/api/generate-insights", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
       });
 
       if (response.ok) {
         const result = await response.json();
         setInsights(result.insights);
       } else {
-        // Get the error message from the response
         const errorData = await response.json();
         alert(`Failed to generate insights: ${errorData.detail || 'Unknown error'}`);
       }
@@ -72,84 +86,121 @@ function App() {
     }
   };
 
-  return (
-    <div className="max-w-4xl mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-6">Goals and Journals</h1>
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!currentMessage.trim()) return;
 
-      <form onSubmit={handleSubmit} className="space-y-4 mb-8">
-        <div>
-          <label className="block mb-2">
-            Yearly Goal:
+    try {
+      const response = await fetch("http://127.0.0.1:8000/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: currentMessage,
+          context: insights // Sending the insights as context
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setCurrentMessage("");
+        await fetchChatHistory();
+      }
+    } catch (error) {
+      console.error("Error sending message:", error);
+    }
+  };
+
+  return (
+    <div className="container">
+      <h1 className="title">Goals and Journals</h1>
+
+      <div className="layout">
+        <div className="main-content">
+          <form onSubmit={handleSubmit} className="form">
+            <div>
+              <label>Journal:</label>
+              <textarea
+                value={journal}
+                onChange={(e) => setJournal(e.target.value)}
+                className="textarea"
+              />
+            </div>
+            <button type="submit" className="button">Submit</button>
+            <button
+              type="button"
+              onClick={handleTherapistInsights}
+              disabled={isLoading}
+              className="button"
+            >
+              {isLoading ? "Generating Insights..." : "Need Therapy?"}
+            </button>
+          </form>
+          {insights && (
+            <div className="insights-container">
+              <h2 className="insights-title">Therapist Insights</h2>
+              <p className="insights-text">{insights}</p>
+            </div>
+          )}
+
+          {isChatting && (
+            <div className="chat-container">
+              <div className="chat-messages">
+                {chatMessages.map((msg, index) => (
+                  <div
+                    key={index}
+                    className={`message ${msg.role === 'user' ? 'user-message' : 'assistant-message'}`}
+                  >
+                    <p>{msg.content}</p>
+                  </div>
+                ))}
+                <div ref={chatEndRef} />
+              </div>
+              <form onSubmit={handleSendMessage} className="chat-input-form">
+                <input
+                  type="text"
+                  value={currentMessage}
+                  onChange={(e) => setCurrentMessage(e.target.value)}
+                  placeholder="Type your message..."
+                  className="chat-input"
+                />
+                <button type="submit" className="button">Send</button>
+              </form>
+            </div>
+          )}
+        </div>
+
+        <div className="sidebar">
+          <div>
+            <label>Yearly Goal</label>
             <input
               type="text"
               value={yearlyGoal}
               onChange={(e) => setYearlyGoal(e.target.value)}
-              className="w-full p-2 border rounded mt-1"
+              className="input"
             />
-          </label>
-        </div>
-
-        <div>
-          <label className="block mb-2">
-            Monthly Goal:
+          </div>
+          <div>
+            <label>Monthly Goal</label>
             <input
               type="text"
               value={monthlyGoal}
               onChange={(e) => setMonthlyGoal(e.target.value)}
-              className="w-full p-2 border rounded mt-1"
+              className="input"
             />
-          </label>
-        </div>
-
-        <div>
-          <label className="block mb-2">
-            Weekly Goal:
+          </div>
+          <div>
+            <label>Weekly Goal</label>
             <input
               type="text"
               value={weeklyGoal}
               onChange={(e) => setWeeklyGoal(e.target.value)}
-              className="w-full p-2 border rounded mt-1"
+              className="input"
             />
-          </label>
-        </div>
-
-        <div>
-          <label className="block mb-2">
-            Journal:
-            <textarea
-              value={journal}
-              onChange={(e) => setJournal(e.target.value)}
-              className="w-full p-2 border rounded mt-1 h-32"
-            ></textarea>
-          </label>
-        </div>
-
-        <button
-          type="submit"
-          className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-        >
-          Submit
-        </button>
-      </form>
-
-      <div className="mt-8">
-        <button
-          onClick={handleTherapistInsights}
-          disabled={isLoading}
-          className="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600 disabled:bg-purple-300"
-        >
-          {isLoading ? "Generating Insights..." : "Need Therapy?"}
-        </button>
-
-        {insights && (
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-            <h2 className="text-xl font-semibold mb-4">Therapist Insights</h2>
-            <p className="whitespace-pre-wrap">{insights}</p>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
 }
 
-export default App
+export default App;
