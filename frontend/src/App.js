@@ -8,10 +8,11 @@ function App() {
   const [journal, setJournal] = useState("");
   const [insights, setInsights] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [chatMessages, setChatMessages] = useState([]);
+  const [chatMessages, setChatHistory] = useState([]);
   const [currentMessage, setCurrentMessage] = useState("");
   const [isChatting, setIsChatting] = useState(false);
   const chatEndRef = useRef(null);
+
 
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -26,12 +27,16 @@ function App() {
       const response = await fetch("http://127.0.0.1:8000/api/chat-history");
       if (response.ok) {
         const data = await response.json();
-        setChatMessages(data.messages);
+        setChatHistory(data.messages);  // ✅ Now this will work!
       }
     } catch (error) {
       console.error("Error fetching chat history:", error);
     }
   };
+
+  useEffect(() => {
+    fetchChatHistory();  // ✅ Fetch chat history when the component mounts
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -74,9 +79,10 @@ function App() {
       if (response.ok) {
         const result = await response.json();
         setInsights(result.insights);
+        setIsChatting(true); // Enable chat after insights are generated
       } else {
         const errorData = await response.json();
-        alert(`Failed to generate insights: ${errorData.detail || 'Unknown error'}`);
+        alert(`Failed to generate insights: ${errorData.detail || "Unknown error"}`);
       }
     } catch (error) {
       console.error("Error:", error);
@@ -86,29 +92,48 @@ function App() {
     }
   };
 
+
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!currentMessage.trim()) return;
+
+    console.log("Sending message:", currentMessage);
+
+    setChatHistory((prevHistory) => [
+      ...prevHistory,
+      { role: "user", content: currentMessage }
+    ]);
 
     try {
       const response = await fetch("http://127.0.0.1:8000/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: currentMessage,
-          context: insights // Sending the insights as context
-        }),
+        body: JSON.stringify({ message: currentMessage, context: insights }),
       });
 
+      console.log("Response received:", response);
+
       if (response.ok) {
-        const result = await response.json();
+        const data = await response.json();
+        console.log("AI Response:", data.response);
+
+        setChatHistory((prevHistory) => [
+          ...prevHistory,
+          { role: "assistant", content: data.response }
+        ]);
+
         setCurrentMessage("");
-        await fetchChatHistory();
+      } else {
+        console.error("API call failed:", response.status);
       }
     } catch (error) {
       console.error("Error sending message:", error);
     }
   };
+
+
+
+
 
   return (
     <div className="container">
