@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+//import { supabase } from "./supabase";
 import "./index.css";
 import JournalCalendar from './JournalCalendarComponent'
 
@@ -24,16 +25,30 @@ function App() {
   }, [chatMessages]);
 
   const fetchChatHistory = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      console.error("No token found. User must log in.");
+      return;
+    }
+
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/chat-history");
+      const response = await fetch("http://127.0.0.1:8000/api/chat-history", {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        }
+      });
+
       if (response.ok) {
         const data = await response.json();
-        setChatHistory(data.messages);  // ✅ Now this will work!
+        setChatHistory(data.messages);
       }
     } catch (error) {
       console.error("Error fetching chat history:", error);
     }
   };
+
 
   useEffect(() => {
     fetchChatHistory();  // ✅ Fetch chat history when the component mounts
@@ -71,16 +86,27 @@ function App() {
 
   const handleTherapistInsights = async () => {
     setIsLoading(true);
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      alert("You must log in first!");
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const response = await fetch("http://127.0.0.1:8000/api/generate-insights", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        }
       });
 
       if (response.ok) {
         const result = await response.json();
         setInsights(result.insights);
-        setIsChatting(true); // Enable chat after insights are generated
+        setIsChatting(true);
       } else {
         const errorData = await response.json();
         alert(`Failed to generate insights: ${errorData.detail || "Unknown error"}`);
@@ -92,6 +118,7 @@ function App() {
       setIsLoading(false);
     }
   };
+
 
 
   const handleSendMessage = async (e) => {

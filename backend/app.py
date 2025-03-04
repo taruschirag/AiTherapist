@@ -80,17 +80,21 @@ class UserLogin(BaseModel):
 # Helper Functions
 
 
-# Helper function to validate JWT token
-async def get_current_user(authorization: Optional[str] = Header(None)):
-    if authorization is None:
-        raise HTTPException(status_code=401, detail="Authorization header missing")
 
-    token = authorization.replace("Bearer ", "")
+async def get_current_user(authorization: Optional[str] = Header(None)):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authorization header missing. Please log in.")
+
+    token = authorization.replace("Bearer ", "").strip()
+
+    # Validate the token with Supabase
     response = supabase.auth.get_user(token)
-    if response.data is None:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-    
-    return response.data  # Returns user details
+
+    if response.user is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired token. Please log in again.")
+
+    return response.user
+
 
 # **User Signup Route**
 @app.post("/api/signup")
