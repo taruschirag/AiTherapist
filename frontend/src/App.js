@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import "./index.css";
+import JournalCalendar from './JournalCalendarComponent'
 
 function App() {
   const [yearlyGoal, setYearlyGoal] = useState("");
@@ -224,6 +225,7 @@ function App() {
           </div>
         </div>
       </div>
+      <JournalCalendar />
     </div>
   );
 }

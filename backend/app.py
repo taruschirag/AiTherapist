@@ -68,7 +68,56 @@ class ChatMessage(BaseModel):
     message: str
     context: Optional[str] = None
 
+class UserSignup(BaseModel):
+    email: str
+    password: str
+
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
+
 # Helper Functions
+
+
+# Helper function to validate JWT token
+async def get_current_user(authorization: Optional[str] = Header(None)):
+    if authorization is None:
+        raise HTTPException(status_code=401, detail="Authorization header missing")
+
+    token = authorization.replace("Bearer ", "")
+    response = supabase.auth.get_user(token)
+    if response.data is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    return response.data  # Returns user details
+
+# 🚀 1️⃣ **User Signup Route**
+@app.post("/api/signup")
+async def signup(user: UserSignup):
+    response = supabase.auth.sign_up({"email": user.email, "password": user.password})
+    
+    if response.data is None:
+        raise HTTPException(status_code=400, detail=response.error.message)
+    
+    return {"message": "User signed up successfully!", "user": response.data}
+
+
+# 🚀 2️⃣ **User Login Route**
+@app.post("/api/login")
+async def login(user: UserLogin):
+    response = supabase.auth.sign_in_with_password({"email": user.email, "password": user.password})
+    
+    if response.data is None:
+        raise HTTPException(status_code=400, detail=response.error.message)
+
+    return {"access_token": response.session.access_token, "refresh_token": response.session.refresh_token}
+
+
+# 🚀 3️⃣ **Protected Route (Requires Authentication)**
+@app.get("/api/protected")
+async def protected_route(user=Depends(get_current_user)):
+    return {"message": "You have accessed a protected route!", "user": user}
 
 
 async def get_latest_therapist_insight_date(user_id: str) -> Optional[str]:
@@ -308,6 +357,23 @@ async def chat(message: ChatMessage):
         
     except Exception as e:
         logger.exception("Error in chat endpoint")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/journal-dates")
+async def get_journal_dates():
+    user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
+    try:
+        response = supabase.table("Journals") \
+            .select("created_at") \
+            .eq("user_id", user_id) \
+            .execute()
+        
+        # Extract dates from the response
+        dates = [entry['created_at'] for entry in response.data]
+        return {"dates": dates}
+        
+    except Exception as e:
+        logger.exception("Error retrieving journal dates")
         raise HTTPException(status_code=500, detail=str(e))
         
 @app.get("/")
