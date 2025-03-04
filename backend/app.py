@@ -1,6 +1,6 @@
 import logging.config
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Header, Depends
 from pydantic import BaseModel
 from supabase import create_client, Client
 import os
@@ -92,23 +92,35 @@ async def get_current_user(authorization: Optional[str] = Header(None)):
     
     return response.data  # Returns user details
 
-# 🚀 1️⃣ **User Signup Route**
+# **User Signup Route**
 @app.post("/api/signup")
 async def signup(user: UserSignup):
-    response = supabase.auth.sign_up({"email": user.email, "password": user.password})
-    
-    if response.data is None:
-        raise HTTPException(status_code=400, detail=response.error.message)
-    
-    return {"message": "User signed up successfully!", "user": response.data}
+    try:
+        response = supabase.auth.sign_up({"email": user.email, "password": user.password})
+        
+        # Debugging: Print the actual response object
+        print("Supabase Response:", response)
+
+        if response.user is None:
+            raise HTTPException(status_code=400, detail="Signup failed. Check email/password validity.")
+
+        return {
+            "message": "User signed up successfully!",
+            "user_id": response.user.id,
+            "email": response.user.email
+        }
+    except Exception as e:
+        print("Error during signup:", str(e))  # Debugging
+        raise HTTPException(status_code=500, detail="Signup failed. Check logs.")
 
 
-# 🚀 2️⃣ **User Login Route**
+
+# **User Login Route**
 @app.post("/api/login")
 async def login(user: UserLogin):
     response = supabase.auth.sign_in_with_password({"email": user.email, "password": user.password})
     
-    if response.data is None:
+    if response.user is None:
         raise HTTPException(status_code=400, detail=response.error.message)
 
     return {"access_token": response.session.access_token, "refresh_token": response.session.refresh_token}
@@ -120,7 +132,8 @@ async def protected_route(user=Depends(get_current_user)):
     return {"message": "You have accessed a protected route!", "user": user}
 
 
-async def get_latest_therapist_insight_date(user_id: str) -> Optional[str]:
+async def get_latest_therapist_insight_date(user =Depends(get_current_user)) -> Optional[str]:
+    user_id = user['id']
     response = supabase.table("TherapistInsights") \
         .select("created_at") \
         .eq("user_id", user_id) \
@@ -133,7 +146,8 @@ async def get_latest_therapist_insight_date(user_id: str) -> Optional[str]:
     return None
 
 
-async def get_goals_and_journals(user_id: str, last_insight_date: Optional[str] = None) -> dict:
+async def get_goals_and_journals(user =Depends(get_current_user), last_insight_date: Optional[str] = None) -> dict:
+    user_id = user['id']
     query_goals = supabase.table("Goals").select("*").eq("user_id", user_id)
     query_journals = supabase.table(
         "Journals").select("*").eq("user_id", user_id)
@@ -196,8 +210,9 @@ Focus on emotional patterns, behavioral trends, and potential areas for developm
 
 
 @app.post("/api/goals-journals")
-async def save_goals_and_journal(data: GoalsJournalsRequest):
-    user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
+async def save_goals_and_journal(data: GoalsJournalsRequest, user =Depends(get_current_user)):
+    user_id = user['id']
+    #user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
     try:
         logger.info(f"Processing data: {data}")
 
@@ -228,8 +243,9 @@ async def save_goals_and_journal(data: GoalsJournalsRequest):
 
 
 @app.post("/api/generate-insights")
-async def generate_insights():
-    user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
+async def generate_insights(user =Depends(get_current_user)):
+    user_id = user['id']
+    #user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
     try:
         # Get the date of the last insight
         last_insight_date = await get_latest_therapist_insight_date(user_id)
@@ -263,8 +279,9 @@ async def generate_insights():
 
 
 @app.get("/api/insights")
-async def get_insights():
-    user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
+async def get_insights(user =Depends(get_current_user)):
+    user_id = user['id']
+    #user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
     try:
         response = supabase.table("TherapistInsights") \
             .select("*") \
@@ -282,8 +299,9 @@ async def get_insights():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/chat-history")
-async def get_chat_history():
-    user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
+async def get_chat_history(user =Depends(get_current_user)):
+    user_id = user['id']
+    #user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
     try:
         response = supabase.table("ChatHistory") \
             .select("*") \
@@ -297,8 +315,8 @@ async def get_chat_history():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/chat")
-async def chat(message: ChatMessage):
-    user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
+async def chat(message: ChatMessage, user =Depends(get_current_user)):
+    user_id = user['id']
     try:
         # Get recent chat history
         chat_history = supabase.table("ChatHistory") \
@@ -360,8 +378,8 @@ async def chat(message: ChatMessage):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/journal-dates")
-async def get_journal_dates():
-    user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
+async def get_journal_dates(user =Depends(get_current_user)):
+    user_id = user['id']
     try:
         response = supabase.table("Journals") \
             .select("created_at") \
