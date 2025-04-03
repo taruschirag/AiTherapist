@@ -93,7 +93,11 @@ async def get_current_user(authorization: Optional[str] = Header(None)):
     if response.user is None:
         raise HTTPException(status_code=401, detail="Invalid or expired token. Please log in again.")
 
-    return response.user
+    print("✅ User Object Type:", type(response.user))  # ✅ Debugging
+    
+
+    return response.user  # ✅ Ensure this is an object, not a string
+
 
 
 # **User Signup Route**
@@ -137,7 +141,7 @@ async def protected_route(user=Depends(get_current_user)):
 
 
 async def get_latest_therapist_insight_date(user =Depends(get_current_user)) -> Optional[str]:
-    user_id = user['id']
+    user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
     response = supabase.table("TherapistInsights") \
         .select("created_at") \
         .eq("user_id", user_id) \
@@ -151,7 +155,7 @@ async def get_latest_therapist_insight_date(user =Depends(get_current_user)) -> 
 
 
 async def get_goals_and_journals(user =Depends(get_current_user), last_insight_date: Optional[str] = None) -> dict:
-    user_id = user['id']
+    user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
     query_goals = supabase.table("Goals").select("*").eq("user_id", user_id)
     query_journals = supabase.table(
         "Journals").select("*").eq("user_id", user_id)
@@ -215,7 +219,7 @@ Focus on emotional patterns, behavioral trends, and potential areas for developm
 
 @app.post("/api/goals-journals")
 async def save_goals_and_journal(data: GoalsJournalsRequest, user =Depends(get_current_user)):
-    user_id = user['id']
+    user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
     #user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
     try:
         logger.info(f"Processing data: {data}")
@@ -248,7 +252,8 @@ async def save_goals_and_journal(data: GoalsJournalsRequest, user =Depends(get_c
 
 @app.post("/api/generate-insights")
 async def generate_insights(user =Depends(get_current_user)):
-    user_id = user['id']
+    user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
+    print("THis is the USERID: ", user.id)
     #user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
     try:
         # Get the date of the last insight
@@ -284,7 +289,7 @@ async def generate_insights(user =Depends(get_current_user)):
 
 @app.get("/api/insights")
 async def get_insights(user =Depends(get_current_user)):
-    user_id = user['id']
+    user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
     #user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
     try:
         response = supabase.table("TherapistInsights") \
@@ -304,7 +309,7 @@ async def get_insights(user =Depends(get_current_user)):
 
 @app.get("/api/chat-history")
 async def get_chat_history(user =Depends(get_current_user)):
-    user_id = user['id']
+    user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
     #user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
     try:
         response = supabase.table("ChatHistory") \
@@ -320,7 +325,7 @@ async def get_chat_history(user =Depends(get_current_user)):
 
 @app.post("/api/chat")
 async def chat(message: ChatMessage, user =Depends(get_current_user)):
-    user_id = user['id']
+    user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
     try:
         # Get recent chat history
         chat_history = supabase.table("ChatHistory") \
@@ -383,7 +388,7 @@ async def chat(message: ChatMessage, user =Depends(get_current_user)):
 
 @app.get("/api/journal-dates")
 async def get_journal_dates(user =Depends(get_current_user)):
-    user_id = user['id']
+    user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
     try:
         response = supabase.table("Journals") \
             .select("created_at") \

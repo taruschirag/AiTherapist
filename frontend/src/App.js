@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-//import { supabase } from "./supabase";
+import { supabase, loginUser, logoutUser } from "./supabase";
 import "./index.css";
 import JournalCalendar from './JournalCalendarComponent'
 
@@ -14,6 +14,35 @@ function App() {
   const [currentMessage, setCurrentMessage] = useState("");
   const [isChatting, setIsChatting] = useState(false);
   const chatEndRef = useRef(null);
+  const [user, setUser] = useState(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+
+
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+    };
+    checkUser();
+  }, []);
+
+  const handleLogin = async () => {
+    const data = await loginUser(email, password);
+    if (data) {
+      setUser(data.user);
+      alert("Logged in successfully!");
+    } else {
+      alert("Login failed. Check your credentials.");
+    }
+  };
+
+  const handleLogout = async () => {
+    await logoutUser();
+    setUser(null);
+  };
+
 
 
   const scrollToBottom = () => {
@@ -56,6 +85,15 @@ function App() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      alert("You must log in first!");
+      setIsLoading(false);
+      return;
+    }
+
     const data = {
       goals: { yearly: yearlyGoal, monthly: monthlyGoal, weekly: weeklyGoal },
       journal: journal,
@@ -166,6 +204,29 @@ function App() {
   return (
     <div className="container">
       <h1 className="title">Goals and Journals</h1>
+      {!user ? (
+        <div className="login-container">
+          <h2>Login</h2>
+          <input
+            type="email"
+            placeholder="Enter email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <input
+            type="password"
+            placeholder="Enter password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <button onClick={handleLogin}>Login</button>
+        </div>
+      ) : (
+        <div>
+          <p>Welcome, {user.email}!</p>
+          <button onClick={handleLogout}>Logout</button>
+        </div>
+      )}
 
       <div className="layout">
         <div className="main-content">
