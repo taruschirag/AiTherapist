@@ -1,16 +1,18 @@
-// src/LoginScreen.js
+// src/screens/LoginScreen.js
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './LoginScreen.css';
+import { loginUser, signUpUser } from '../services/supabase';  // ✅ Supabase helpers
 
 const LoginScreen = () => {
     const navigate = useNavigate();
+
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [isLogin, setIsLogin] = useState(true);
     const [error, setError] = useState('');
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
 
@@ -19,23 +21,28 @@ const LoginScreen = () => {
             return;
         }
 
-        // ✅ Simulate successful login
-        localStorage.setItem('user', email); // <- simulate login session
-        console.log('Logging in with:', email);
+        // 🔐 Use Supabase to login/signup
+        const data = isLogin
+            ? await loginUser(email, password)
+            : await signUpUser(email, password);
 
-        navigate('/journal'); // 👈 go to JournalPage after login
+        if (data) {
+            navigate('/journal'); // ✅ Redirect on success
+        } else {
+            setError('Authentication failed. Check credentials or try again.');
+        }
     };
+
     const toggleAuthMode = () => {
         setIsLogin(!isLogin);
         setError('');
     };
 
-
     return (
         <div className="login-screen">
             <div className="login-container">
                 <div className="login-header">
-                    <h1>Tranquil</h1>
+                    <h1>Mindful Reflections</h1>
                     <p>Your AI Companion for Self-Growth</p>
                 </div>
 
