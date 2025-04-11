@@ -1,25 +1,2 @@
-# Environment variables
-.env
-.env.*
-
-# Python
-venv/
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-*.so
-
-# IDE
-.vscode/
-.idea/
-
-# OS
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
+.env 
+venv

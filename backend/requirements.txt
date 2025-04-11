@@ -3,3 +3,5 @@ uvicorn
 python-dotenv
 supabase
 openai
+python-jose[cryptography]
+passlib[bcrypt]

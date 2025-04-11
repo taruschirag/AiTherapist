@@ -1,8 +1,6 @@
 // src/services/api.js
 import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Replace with your actual server URL
 const API_URL = 'http://localhost:8000/api';
 
 // Create axios instance
@@ -15,8 +13,8 @@ const api = axios.create({
 
 // Add interceptor to add auth token to requests
 api.interceptors.request.use(
-    async (config) => {
-        const token = await AsyncStorage.getItem('token');
+    (config) => {
+        const token = localStorage.getItem('auth.token');
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
@@ -32,12 +30,49 @@ export const apiService = {
     // Authentication
     login: async (email, password) => {
         const response = await api.post('/login', { email, password });
+        if (response.data.access_token) {
+            localStorage.setItem('auth.token', response.data.access_token);
+        }
         return response.data;
     },
 
     signup: async (email, password) => {
-        const response = await api.post('/signup', { email, password });
-        return response.data;
+        try {
+            const response = await api.post('/signup', { email, password });
+            if (response.data.access_token) {
+                localStorage.setItem('auth.token', response.data.access_token);
+            } else {
+                console.warn('No access token in signup response:', response.data);
+            }
+            return response.data;
+        } catch (error) {
+            console.error('Signup API error:', error);
+            
+            // Get more details about the error
+            if (error.response) {
+                // The request was made and the server responded with a status code
+                // that falls out of the range of 2xx
+                console.error('Error data:', error.response.data);
+                console.error('Error status:', error.response.status);
+                console.error('Error headers:', error.response.headers);
+                
+                // If there's a more specific error detail from the server
+                if (error.response.data && error.response.data.detail) {
+                    throw new Error(error.response.data.detail);
+                }
+            } else if (error.request) {
+                // The request was made but no response was received
+                console.error('No response received:', error.request);
+                throw new Error('No response from server. Check your connection.');
+            }
+            
+            // Pass through the error
+            throw error;
+        }
+    },
+
+    logout: async () => {
+        localStorage.removeItem('auth.token');
     },
 
     // Journal and Goals

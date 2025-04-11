@@ -1,58 +1,102 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../auth/AuthContext';
+import apiService from '../services/api';
 import './JournalPage.css';
 
-
 function JournalPage() {
-  const [journalEntries, setJournalEntries] = useState([
-    {
-      id: 1,
-      content: "My day was fine...",
-      date: new Date(),
-      reflections: [
-        {
-          question: "What are some Positive and Negative things that happened today?",
-          answer: "Positive: workout + friends. Negative: procrastinated."
-        },
-        {
-          question: "Anything Else You want to share with me?",
-          answer: "Feeling guilty about prioritizing fun over work lately."
-        }
-      ]
-    }
-  ]);
+  const [journalEntries, setJournalEntries] = useState([]);
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
 
-  // Sample data for calendar - in a real app, you'd calculate this from actual entries
+  // Fetch existing journal entries when component mounts
+  useEffect(() => {
+    const fetchJournalEntries = async () => {
+      try {
+        const response = await apiService.getJournalDates();
+        const dates = response.dates || []; // Get dates array from response
+        
+        // Convert dates array to object format for calendar
+        const datesObject = dates.reduce((acc, date) => {
+          // Convert date string to YYYY-MM-DD format
+          const formattedDate = new Date(date).toISOString().split('T')[0];
+          acc[formattedDate] = true;
+          return acc;
+        }, {});
+
+        setCalendarData(prevData => ({
+          ...prevData,
+          journalDates: datesObject
+        }));
+
+        // TODO: Implement endpoint to fetch journal entries
+        // const entries = await apiService.getJournalEntries();
+        // setJournalEntries(entries);
+      } catch (error) {
+        console.error('Error fetching journal data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (user) {
+      fetchJournalEntries();
+    }
+  }, [user]);
+
   const [calendarData, setCalendarData] = useState({
     currentMonth: new Date(),
-    journalDates: {
-      // Format: 'YYYY-MM-DD': true/false (true = has entry, false = no entry)
-      '2025-04-01': true,
-      '2025-04-02': false,
-      '2025-04-03': true,
-      '2025-04-04': true,
-      '2025-04-05': false,
-      '2025-04-06': false,
-      '2025-04-07': true,
-      '2025-04-08': true,
-    }
+    journalDates: {}
   });
-
-  // add this when I have authentication ready
-  // useEffect(() => {
-  //   if (!localStorage.getItem('user')) {
-  //     navigate('/login');
-  //   }
-  // }, []);
 
   const [currentEntry, setCurrentEntry] = useState("");
   const navigate = useNavigate();
 
   const handleEntryChange = (e) => setCurrentEntry(e.target.value);
 
-  const handleSubmit = () => {
-    console.log("Entry submitted:", currentEntry);
-    navigate('/reflect');
+  const handleSubmit = async () => {
+    if (!currentEntry.trim()) {
+      alert('Please write something in your journal before submitting.');
+      return;
+    }
+
+    try {
+      // Save the journal entry
+      await apiService.saveJournalAndGoals(
+        {
+          yearly: "Not specified",  // Provide default values instead of empty strings
+          monthly: "Not specified",
+          weekly: "Not specified"
+        },
+        currentEntry
+      );
+
+      // Update calendar data
+      const today = new Date().toISOString().split('T')[0];
+      setCalendarData(prevData => ({
+        ...prevData,
+        journalDates: {
+          ...prevData.journalDates,
+          [today]: true
+        }
+      }));
+
+      // Clear the current entry
+      setCurrentEntry("");
+
+      // Navigate to reflection page
+      navigate('/reflect');
+    } catch (error) {
+      console.error('Error saving journal entry:', error);
+      let errorMessage = 'Failed to save your journal entry. Please try again.';
+      
+      if (error.response && error.response.data) {
+        console.error('Error response:', error.response.data);
+        errorMessage = `Failed to save your journal entry: ${error.response.data.detail || JSON.stringify(error.response.data)}`;
+      }
+      
+      alert(errorMessage);
+    }
   };
 
   // Calendar functions
