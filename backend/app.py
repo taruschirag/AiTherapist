@@ -37,6 +37,7 @@ app = FastAPI()
 origins = [
     "http://localhost",
     "http://localhost:3000",
+    "http://localhost:8000",
 ]
 
 app.add_middleware(
@@ -104,22 +105,69 @@ async def get_current_user(authorization: Optional[str] = Header(None)):
 @app.post("/api/signup")
 async def signup(user: UserSignup):
     try:
+        # First, check if the user already exists
+        print(f"Attempting to sign up user with email: {user.email}")
+        
+        # Sign up the user with Supabase
         response = supabase.auth.sign_up({"email": user.email, "password": user.password})
         
-        # Debugging: Print the actual response object
-        print("Supabase Response:", response)
+        # Log the response
+        print("Supabase Signup Response:", response)
 
         if response.user is None:
+            print("Signup failed: User is None")
             raise HTTPException(status_code=400, detail="Signup failed. Check email/password validity.")
 
-        return {
-            "message": "User signed up successfully!",
-            "user_id": response.user.id,
-            "email": response.user.email
-        }
+        try:
+            # Try to save user email to database
+            print(f"Attempting to save user to database with ID: {response.user.id}")
+            supabase.table("users").insert({
+                "id": response.user.id,  # Use the Supabase user ID as the primary key
+                "email": user.email,
+                "created_at": datetime.utcnow().isoformat()
+            }).execute()
+            print("Successfully saved user to database")
+        except Exception as db_error:
+            # If database save fails, continue with auth flow but log the error
+            print(f"Warning: Failed to save user to database: {str(db_error)}")
+            # This shouldn't stop the signup process
+
+        try:
+            # Try to sign in the user immediately after signup
+            print("Attempting to sign in the user after signup")
+            signin_response = supabase.auth.sign_in_with_password({"email": user.email, "password": user.password})
+            print("Signin response after signup:", signin_response)
+            
+            if signin_response.user is None:
+                print("Warning: Auto-login failed after signup")
+                # If sign-in fails after signup, still return success but without tokens
+                return {
+                    "message": "User signed up successfully but auto-login failed. Please log in manually.",
+                    "user_id": response.user.id,
+                    "email": response.user.email
+                }
+
+            # Return both user info and tokens
+            print("Successfully signed up and logged in user")
+            return {
+                "message": "User signed up successfully!",
+                "user_id": response.user.id,
+                "email": response.user.email,
+                "access_token": signin_response.session.access_token,
+                "refresh_token": signin_response.session.refresh_token
+            }
+        except Exception as signin_error:
+            # If auto-login fails, still consider signup successful
+            print(f"Auto-login failed after signup: {str(signin_error)}")
+            return {
+                "message": "User signed up successfully but auto-login failed. Please log in manually.",
+                "user_id": response.user.id,
+                "email": response.user.email
+            }
     except Exception as e:
-        print("Error during signup:", str(e))  # Debugging
-        raise HTTPException(status_code=500, detail="Signup failed. Check logs.")
+        print("Error during signup:", str(e))
+        print("Error details:", e)
+        raise HTTPException(status_code=500, detail=f"Signup failed: {str(e)}")
 
 
 
@@ -140,8 +188,7 @@ async def protected_route(user=Depends(get_current_user)):
     return {"message": "You have accessed a protected route!", "user": user}
 
 
-async def get_latest_therapist_insight_date(user =Depends(get_current_user)) -> Optional[str]:
-    user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
+async def get_latest_therapist_insight_date(user_id: str) -> Optional[str]:
     response = supabase.table("TherapistInsights") \
         .select("created_at") \
         .eq("user_id", user_id) \
@@ -154,8 +201,7 @@ async def get_latest_therapist_insight_date(user =Depends(get_current_user)) -> 
     return None
 
 
-async def get_goals_and_journals(user =Depends(get_current_user), last_insight_date: Optional[str] = None) -> dict:
-    user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
+async def get_goals_and_journals(user_id: str, last_insight_date: Optional[str] = None) -> dict:
     query_goals = supabase.table("Goals").select("*").eq("user_id", user_id)
     query_journals = supabase.table(
         "Journals").select("*").eq("user_id", user_id)
@@ -219,42 +265,54 @@ Focus on emotional patterns, behavioral trends, and potential areas for developm
 
 @app.post("/api/goals-journals")
 async def save_goals_and_journal(data: GoalsJournalsRequest, user =Depends(get_current_user)):
-    user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
-    #user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
     try:
         logger.info(f"Processing data: {data}")
 
-        for goal_type, content in data.goals.model_dump().items():
-            response = supabase.table("Goals").insert(
-                {"user_id": user_id, "type": goal_type, "content": content}).execute()
+        # First save the journal entry since it's required
+        journal_response = supabase.table("Journals").insert({
+            "user_id": user.id, 
+            "content": data.journal
+        }).execute()
 
-            if response.data is None and response.error is not None:
-                logger.error(
-                    f"Error saving goal ({goal_type}): {response.error}")
-                raise HTTPException(
-                    status_code=500, detail=f"Error saving goal ({goal_type}): {response.error}")
-
-        response = supabase.table("Journals").insert(
-            {"user_id": user_id, "content": data.journal}).execute()
-
-        if response.data is None and response.error is not None:
-            logger.error(f"Error saving journal: {response.error}")
+        if not journal_response.data:
+            logger.error(f"Error saving journal: {journal_response}")
             raise HTTPException(
-                status_code=500, detail=f"Error saving journal: {response.error}")
+                status_code=500, 
+                detail=f"Error saving journal: Could not create journal entry"
+            )
 
-        return {"message": "Data saved successfully!"}
+        # Then try to save goals if they're not empty/default values
+        goals_saved = []
+        for goal_type, content in data.goals.model_dump().items():
+            if content and content != "Not specified":  # Only save non-empty and non-default goals
+                goal_response = supabase.table("Goals").insert({
+                    "user_id": user.id,
+                    "type": goal_type,
+                    "content": content
+                }).execute()
+                
+                if goal_response.data:
+                    goals_saved.append(goal_type)
+                else:
+                    logger.warning(f"Error saving goal ({goal_type}): {goal_response}")
+
+        return {
+            "message": "Data saved successfully!",
+            "journal_saved": True,
+            "goals_saved": goals_saved
+        }
 
     except Exception as e:
-        logger.exception("Unexpected error occurred")
+        logger.exception("Error in save_goals_and_journal")
         raise HTTPException(
-            status_code=500, detail=f"Unexpected error occurred: {str(e)}")
+            status_code=500,
+            detail=str(e)
+        )
 
 
 @app.post("/api/generate-insights")
 async def generate_insights(user =Depends(get_current_user)):
-    user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
-    print("THis is the USERID: ", user.id)
-    #user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
+    user_id = user.id
     try:
         # Get the date of the last insight
         last_insight_date = await get_latest_therapist_insight_date(user_id)
@@ -276,7 +334,7 @@ async def generate_insights(user =Depends(get_current_user)):
             "created_at": datetime.utcnow().isoformat()
         }).execute()
 
-        if response.data is None and response.error is not None:
+        if not response.data:
             raise HTTPException(
                 status_code=500, detail="Failed to save insights")
 
@@ -289,8 +347,7 @@ async def generate_insights(user =Depends(get_current_user)):
 
 @app.get("/api/insights")
 async def get_insights(user =Depends(get_current_user)):
-    user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
-    #user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
+    user_id = user.id
     try:
         response = supabase.table("TherapistInsights") \
             .select("*") \
@@ -309,24 +366,32 @@ async def get_insights(user =Depends(get_current_user)):
 
 @app.get("/api/chat-history")
 async def get_chat_history(user =Depends(get_current_user)):
-    user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
-    #user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
+    user_id = user.id
     try:
+        logger.info(f"Fetching chat history for user {user_id}")
+        
         response = supabase.table("ChatHistory") \
             .select("*") \
             .eq("user_id", user_id) \
             .order("created_at", asc=True) \
             .execute()
         
+        if not response.data:
+            logger.info(f"No chat history found for user {user_id}")
+            return {"messages": []}
+            
+        logger.info(f"Retrieved {len(response.data)} chat messages for user {user_id}")
         return {"messages": response.data}
     except Exception as e:
-        logger.exception("Error retrieving chat history")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception(f"Error retrieving chat history: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve chat history: {str(e)}")
 
 @app.post("/api/chat")
 async def chat(message: ChatMessage, user =Depends(get_current_user)):
-    user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
+    user_id = user.id
     try:
+        logger.info(f"Received chat message from user {user_id}: {message.message[:30]}...")
+        
         # Get recent chat history
         chat_history = supabase.table("ChatHistory") \
             .select("*") \
@@ -337,10 +402,14 @@ async def chat(message: ChatMessage, user =Depends(get_current_user)):
         
         # Format chat history for OpenAI
         messages = [
-            {"role": "system", "content": """You are an empathetic AI therapist. 
+            {"role": "system", "content": """You are an empathetic AI therapist named Therapost. 
+            You help users process their thoughts and emotions through thoughtful conversation.
             Use the provided context about the user's journal entries and previous chat
             to give thoughtful, therapeutic responses. Focus on being supportive while
-            maintaining professional boundaries. Avoid giving medical advice."""}
+            maintaining professional boundaries. Avoid giving medical advice.
+            Keep responses concise (2-3 paragraphs maximum) and focused on the user's immediate concerns.
+            Ask thoughtful follow-up questions to deepen the conversation.
+            """}
         ]
         
         # Add context if provided
@@ -348,47 +417,60 @@ async def chat(message: ChatMessage, user =Depends(get_current_user)):
             messages.append({"role": "system", "content": f"Context from user's journal entries and goals: {message.context}"})
         
         # Add chat history
-        for chat in reversed(chat_history.data):
-            messages.append({"role": chat['role'], "content": chat['content']})
+        if chat_history.data and len(chat_history.data) > 0:
+            # Reverse to get chronological order and limit to last 5 messages
+            relevant_history = list(reversed(chat_history.data))[:10]
+            for chat in relevant_history:
+                messages.append({"role": chat['role'], "content": chat['content']})
         
         # Add user's new message
         messages.append({"role": "user", "content": message.message})
         
+        logger.info(f"Sending {len(messages)} messages to OpenAI")
+        
         # Get response from OpenAI
         client = openai.OpenAI()
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4o-mini",
             messages=messages,
-            max_tokens=1000
+            max_tokens=1000,
+            temperature=0.7
         )
         
         ai_response = response.choices[0].message.content
+        logger.info(f"Received response from OpenAI: {ai_response[:30]}...")
         
         # Save user message to database
-        supabase.table("ChatHistory").insert({
+        user_msg_response = supabase.table("ChatHistory").insert({
             "user_id": user_id,
             "role": "user",
             "content": message.message,
             "created_at": datetime.utcnow().isoformat()
         }).execute()
         
+        if not user_msg_response.data:
+            logger.warning(f"Failed to save user message to database: {user_msg_response}")
+        
         # Save AI response to database
-        supabase.table("ChatHistory").insert({
+        ai_msg_response = supabase.table("ChatHistory").insert({
             "user_id": user_id,
             "role": "assistant",
             "content": ai_response,
             "created_at": datetime.utcnow().isoformat()
         }).execute()
         
+        if not ai_msg_response.data:
+            logger.warning(f"Failed to save AI response to database: {ai_msg_response}")
+        
         return {"response": ai_response}
         
     except Exception as e:
-        logger.exception("Error in chat endpoint")
+        logger.exception(f"Error in chat endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/journal-dates")
 async def get_journal_dates(user =Depends(get_current_user)):
-    user_id = 'ea86ffe8-b184-4dc5-b8fa-0ad52768c913'
+    user_id = user.id
     try:
         response = supabase.table("Journals") \
             .select("created_at") \

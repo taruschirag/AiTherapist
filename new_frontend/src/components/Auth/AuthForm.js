@@ -1,15 +1,16 @@
-// src/screens/LoginScreen.js
+// src/components/Auth/AuthForm.js
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import './LoginScreen.css';
-import { loginUser, signUpUser } from '../services/supabase';  // ✅ Supabase helpers
+import './AuthForm.css';  // Renamed CSS file accordingly
+import { loginUser, signUpUser } from '../../services/supabase';
 
-const LoginScreen = () => {
+
+const AuthForm = ({ mode }) => {
     const navigate = useNavigate();
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [isLogin, setIsLogin] = useState(true);
+    const [isLogin, setIsLogin] = useState(mode === 'signin');
     const [error, setError] = useState('');
 
     const handleSubmit = async (e) => {
@@ -21,13 +22,12 @@ const LoginScreen = () => {
             return;
         }
 
-        // 🔐 Use Supabase to login/signup
         const data = isLogin
             ? await loginUser(email, password)
             : await signUpUser(email, password);
 
         if (data) {
-            navigate('/journal'); // ✅ Redirect on success
+            navigate('/journal');
         } else {
             setError('Authentication failed. Check credentials or try again.');
         }
@@ -131,4 +131,4 @@ const LoginScreen = () => {
     );
 };
 
-export default LoginScreen;
+export default AuthForm;

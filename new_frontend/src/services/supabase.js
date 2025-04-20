@@ -1,8 +1,8 @@
 // src/supabase.js
 import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL = "https://dsdmhulhwkfidcmijqxn.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRzZG1odWxod2tmaWRjbWlqcXhuIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczMzUyNzc3MCwiZXhwIjoyMDQ5MTAzNzcwfQ.gZij1cv0Nh2Z8fHVT2VWlDM_Q_5TEcavW7ifAElAWGo;"
+const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL;
+const SUPABASE_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
     console.error("Supabase URL or Key is missing. Check your .env file.");
@@ -10,13 +10,15 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// 🔐 Signup Function
+//  Signup
 export const signUpUser = async (email, password) => {
     try {
-        const { data, error } = await supabase.auth.signUp({ email, password });
-        if (error) throw error;
+        const { data, error } = await supabase.auth.signUp({
+            email,
+            password
+        });
 
-        console.log("Signup successful:", data);
+        if (error) throw error;
         return data;
     } catch (error) {
         console.error("Signup Error:", error.message);
@@ -24,12 +26,11 @@ export const signUpUser = async (email, password) => {
     }
 };
 
-// 🔐 Login Function
+//  Login
 export const loginUser = async (email, password) => {
     try {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-
         console.log("Login successful:", data);
         localStorage.setItem("token", data.session.access_token);
         return data;
@@ -50,23 +51,17 @@ export const logoutUser = async () => {
     }
 };
 
-// Optional: For testing protected API
-export const fetchProtectedData = async () => {
-    const token = localStorage.getItem("token");
+export const getUserJournals = async (userId) => {
+    const { data, error } = await supabase
+        .from('Journals') // Case-sensitive table name!
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
 
-    if (!token) {
-        console.error("No token found, please log in.");
-        return;
+    if (error) {
+        console.error("Failed to fetch journal entries:", error.message);
+        return [];
     }
 
-    const response = await fetch("http://localhost:8000/api/protected", {
-        method: "GET",
-        headers: {
-            "Authorization": `Bearer ${token}`,
-            "Content-Type": "application/json"
-        }
-    });
-
-    const data = await response.json();
-    console.log("Protected Data:", data);
+    return data;
 };
