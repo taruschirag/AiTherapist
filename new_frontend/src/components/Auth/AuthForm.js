@@ -1,102 +1,134 @@
+// src/components/Auth/AuthForm.js
 import React, { useState } from 'react';
-import { useAuth } from '../../auth/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import './AuthForm.css';
+import './AuthForm.css';  // Renamed CSS file accordingly
+import { loginUser, signUpUser } from '../../services/supabase';
 
-const AuthForm = ({ mode = 'signin' }) => {
+
+const AuthForm = ({ mode }) => {
+    const navigate = useNavigate();
+
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [isLogin, setIsLogin] = useState(mode === 'signin');
     const [error, setError] = useState('');
-    const [loading, setLoading] = useState(false);
-    const { signIn, signUp } = useAuth();
-    const navigate = useNavigate();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
-        setLoading(true);
 
-        try {
-            if (mode === 'signup') {
-                const { error } = await signUp(email, password);
-                if (error) {
-                    // Extract the most helpful part of the error message
-                    const errorMessage = error.message || 'Failed to sign up';
-                    throw new Error(errorMessage);
-                }
-                // Successfully signed up and automatically logged in
-                navigate('/home');
-            } else {
-                const { error } = await signIn(email, password);
-                if (error) {
-                    // Extract the most helpful part of the error message
-                    const errorMessage = error.message || 'Failed to sign in';
-                    throw new Error(errorMessage);
-                }
-                navigate('/home');
-            }
-        } catch (error) {
-            console.error('Authentication error:', error);
-            
-            let userFriendlyMessage = error.message;
-            
-            // Make the error message more user-friendly
-            if (error.message.includes('500')) {
-                userFriendlyMessage = 'Server error occurred. Please try again later or contact support.';
-            } else if (error.message.includes('sign up')) {
-                userFriendlyMessage = 'Failed to create account. This email may already be registered.';
-            } else if (error.message.includes('sign in') || error.message.includes('login')) {
-                userFriendlyMessage = 'Login failed. Please check your email and password.';
-            }
-            
-            setError(userFriendlyMessage);
-        } finally {
-            setLoading(false);
+        if (!email || !password) {
+            setError('Please fill in all fields');
+            return;
+        }
+
+        const data = isLogin
+            ? await loginUser(email, password)
+            : await signUpUser(email, password);
+
+        if (data) {
+            navigate('/journal');
+        } else {
+            setError('Authentication failed. Check credentials or try again.');
         }
     };
 
-    return (
-        <div className="auth-form-container">
-            <form onSubmit={handleSubmit} className="auth-form">
-                <h2>{mode === 'signup' ? 'Create Account' : 'Welcome Back'}</h2>
-                
-                {error && <div className="auth-error">{error}</div>}
-                
-                <div className="form-group">
-                    <input
-                        type="email"
-                        placeholder="Email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        required
-                    />
-                </div>
-                
-                <div className="form-group">
-                    <input
-                        type="password"
-                        placeholder="Password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        required
-                        minLength={6}
-                    />
-                </div>
-                
-                <button type="submit" disabled={loading} className="auth-button">
-                    {loading ? 'Loading...' : mode === 'signup' ? 'Sign Up' : 'Sign In'}
-                </button>
+    const toggleAuthMode = () => {
+        setIsLogin(!isLogin);
+        setError('');
+    };
 
-                <div className="auth-switch">
-                    {mode === 'signup' ? (
-                        <p>Already have an account? <a href="/login">Sign In</a></p>
-                    ) : (
-                        <p>Don't have an account? <a href="/signup">Sign Up</a></p>
-                    )}
+    return (
+        <div className="login-screen">
+            <div className="login-container">
+                <div className="login-header">
+                    <h1>Mindful Reflections</h1>
+                    <p>Your AI Companion for Self-Growth</p>
                 </div>
-            </form>
+
+                <div className="auth-form-container">
+                    <h2>{isLogin ? 'Welcome Back' : 'Create Account'}</h2>
+
+                    {error && <div className="error-message">{error}</div>}
+
+                    <form onSubmit={handleSubmit} className="auth-form">
+                        <div className="form-group">
+                            <label htmlFor="email">Email</label>
+                            <input
+                                type="email"
+                                id="email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                placeholder="your.email@example.com"
+                            />
+                        </div>
+
+                        <div className="form-group">
+                            <label htmlFor="password">Password</label>
+                            <input
+                                type="password"
+                                id="password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                placeholder="••••••••"
+                            />
+                        </div>
+
+                        {isLogin && (
+                            <div className="forgot-password">
+                                <a href="#reset">Forgot password?</a>
+                            </div>
+                        )}
+
+                        <button type="submit" className="auth-button">
+                            {isLogin ? 'Log In' : 'Sign Up'}
+                        </button>
+                    </form>
+
+                    <div className="auth-switcher">
+                        <p>
+                            {isLogin
+                                ? "Don't have an account?"
+                                : "Already have an account?"}
+                            <button
+                                onClick={toggleAuthMode}
+                                className="switch-auth-button"
+                            >
+                                {isLogin ? 'Sign Up' : 'Log In'}
+                            </button>
+                        </p>
+                    </div>
+
+                    <div className="auth-divider">
+                        <span>or</span>
+                    </div>
+
+                    <div className="social-login">
+                        <button className="social-button google">
+                            Continue with Google
+                        </button>
+                        <button className="social-button apple">
+                            Continue with Apple
+                        </button>
+                    </div>
+                </div>
+
+                <div className="login-footer">
+                    <p>Your private space for reflection and growth</p>
+                    <p className="copyright">© 2025 Mindful Reflections</p>
+                </div>
+            </div>
+
+            <div className="login-illustration">
+                <div className="illustration-content">
+                    <div className="quote-bubble">
+                        <p>"Self-reflection is the school of wisdom."</p>
+                        <p className="quote-author">— Baltasar Gracián</p>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 };
 
-export default AuthForm; 
+export default AuthForm;

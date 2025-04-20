@@ -1,8 +1,7 @@
-// src/ReflectionScreen.js
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
-import apiService from '../services/api';
+import { supabase } from '../services/supabase';
 import './ReflectionScreen.css';
 
 const ReflectionScreen = () => {
@@ -14,7 +13,6 @@ const ReflectionScreen = () => {
     const weekDate = "Week of March 05";
     const messagesEndRef = useRef(null);
 
-    // Hardcoded chat history sessions
     const chatSessions = [
         { id: 1, date: "June 10, 2023", title: "Initial Assessment", preview: "Tell me about what brought you here today..." },
         { id: 2, date: "June 17, 2023", title: "Anxiety Management", preview: "Let's discuss some strategies for managing anxiety..." },
@@ -47,26 +45,50 @@ const ReflectionScreen = () => {
     const [newMessage, setNewMessage] = useState("");
     const [isSending, setIsSending] = useState(false);
 
-    // Scroll to bottom of chat when messages change
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [conversation]);
 
-    // Fetch chat history when component mounts
+    // Fetch chat history based on the selected session date
     useEffect(() => {
-        const fetchChatHistory = async () => {
+        const fetchChatHistory = async (sessionDate) => {
             try {
-                const response = await apiService.getChatHistory();
-                if (response && response.messages) {
-                    // Transform the messages into our expected format
-                    const formattedMessages = response.messages.map(msg => ({
-                        id: msg.id || Date.now() + Math.random(),
-                        text: msg.content,
-                        isUser: msg.role === 'user',
-                        timestamp: new Date(msg.created_at)
-                    }));
-                    setConversation(formattedMessages);
+                let query = supabase
+                    .from('ChatHistory')
+                    .select('*')
+                    .eq('user_id', user.id)
+                    .order('created_at', { ascending: true });
+
+                // If a specific session is selected and it's not "Today"
+                if (sessionDate && sessionDate !== "Today") {
+                    // Convert session date to a date object
+                    const date = new Date(sessionDate);
+                    const startOfDay = new Date(date.setHours(0, 0, 0, 0));
+                    const endOfDay = new Date(date.setHours(23, 59, 59, 999));
+
+                    query = query
+                        .gte('created_at', startOfDay.toISOString())
+                        .lte('created_at', endOfDay.toISOString());
+                } else if (sessionDate === "Today") {
+                    // Fetch messages from today
+                    const today = new Date();
+                    const startOfDay = new Date(today.setHours(0, 0, 0, 0));
+
+                    query = query.gte('created_at', startOfDay.toISOString());
                 }
+
+                const { data, error } = await query;
+
+                if (error) throw error;
+
+                const formattedMessages = data.map(msg => ({
+                    id: msg.id || Date.now() + Math.random(),
+                    text: msg.content,
+                    isUser: msg.role === 'user',
+                    timestamp: new Date(msg.created_at)
+                }));
+
+                setConversation(formattedMessages);
             } catch (error) {
                 console.error('Error fetching chat history:', error);
             } finally {
@@ -75,53 +97,75 @@ const ReflectionScreen = () => {
         };
 
         if (user) {
-            fetchChatHistory();
+            // If a session is selected, fetch that session's data
+            if (selectedSession) {
+                const session = chatSessions.find(s => s.id === selectedSession);
+                if (session) {
+                    fetchChatHistory(session.date);
+                }
+            } else {
+                // Default to current/today session
+                fetchChatHistory("Today");
+            }
         } else {
             setLoading(false);
         }
-    }, [user]);
+    }, [user, selectedSession]);
 
     const handleSendMessage = async () => {
         if (newMessage.trim() && !isSending) {
             try {
                 setIsSending(true);
-                
-                // Add user message to conversation immediately
-                const userMessage = { 
-                    id: Date.now(), 
-                    text: newMessage.trim(), 
+                const messageToSend = newMessage.trim();
+                const userMessage = {
+                    id: Date.now(),
+                    text: messageToSend,
                     isUser: true,
                     timestamp: new Date()
                 };
                 setConversation(prev => [...prev, userMessage]);
-                const messageToSend = newMessage.trim();
-                setNewMessage(""); // Clear input field immediately
-                
-                // Send message to backend and get AI response
-                const response = await apiService.sendMessage(messageToSend);
-                
-                // Add AI response to conversation
-                if (response && response.response) {
-                    const aiMessage = { 
-                        id: Date.now() + 1, 
-                        text: response.response, 
-                        isUser: false,
-                        timestamp: new Date()
-                    };
-                    setConversation(prev => [...prev, aiMessage]);
-                } else {
-                    throw new Error("Invalid response format");
-                }
+                setNewMessage("");
+
+                // Save user message to Supabase
+                await supabase.from('ChatHistory').insert([
+                    {
+                        user_id: user.id,
+                        content: messageToSend,
+                        role: 'user'
+                    }
+                ]);
+
+                // Simulated AI response
+                const aiReply = {
+                    content: "Thanks for sharing. Tell me more about how that made you feel.",
+                    role: 'assistant'
+                };
+
+                await supabase.from('ChatHistory').insert([
+                    {
+                        user_id: user.id,
+                        content: aiReply.content,
+                        role: aiReply.role
+                    }
+                ]);
+
+                const aiMessage = {
+                    id: Date.now() + 1,
+                    text: aiReply.content,
+                    isUser: false,
+                    timestamp: new Date()
+                };
+                setConversation(prev => [...prev, aiMessage]);
+
             } catch (error) {
                 console.error('Error sending message:', error);
-                // Add error message to conversation
-                const errorMessage = {
+                const fallback = {
                     id: Date.now() + 1,
                     text: "Sorry, I'm having trouble responding right now. Please try again.",
                     isUser: false,
                     timestamp: new Date()
                 };
-                setConversation(prev => [...prev, errorMessage]);
+                setConversation(prev => [...prev, fallback]);
             } finally {
                 setIsSending(false);
             }
@@ -141,8 +185,19 @@ const ReflectionScreen = () => {
 
     const handleSessionSelect = (sessionId) => {
         setSelectedSession(sessionId);
-        // In a real app, this would load the selected chat session
-        // For now, we're just showing the current conversation
+        setLoading(true); // Show loading while fetching new session data
+    };
+
+    const getSessionTitle = () => {
+        if (!selectedSession) return "Current Session";
+        const session = chatSessions.find(s => s.id === selectedSession);
+        return session ? session.title : "Session";
+    };
+
+    const getSessionDate = () => {
+        if (!selectedSession) return "Today";
+        const session = chatSessions.find(s => s.id === selectedSession);
+        return session ? session.date : "";
     };
 
     if (loading) {
@@ -159,17 +214,14 @@ const ReflectionScreen = () => {
             </div>
 
             <div className="reflection-content">
-                {/* Chat History Sidebar */}
                 <div className="chat-history-sidebar">
                     <h3>Session History</h3>
                     <div className="sessions-list">
                         {chatSessions.map(session => (
-                            <div 
+                            <div
                                 key={session.id}
-                                className={`session-item ${
-                                    (selectedSession === session.id || 
-                                    (selectedSession === null && session.isCurrent)) ? 'active' : ''
-                                }`}
+                                className={`session-item ${(selectedSession === session.id || (selectedSession === null && session.isCurrent)) ? 'active' : ''
+                                    }`}
                                 onClick={() => handleSessionSelect(session.id)}
                             >
                                 <div className="session-date">{session.date}</div>
@@ -180,15 +232,19 @@ const ReflectionScreen = () => {
                     </div>
                 </div>
 
-                {/* Main Chat Section */}
                 <div className={`chat-section ${showSummary ? 'with-summary' : 'full-width'}`}>
+                    <div className="chat-header">
+                        <h3>{getSessionTitle()}</h3>
+                        <span className="session-date-label">{getSessionDate()}</span>
+                    </div>
+
                     <div className="chat-messages">
                         {conversation.length === 0 && (
                             <div className="empty-chat-message">
-                                <p>No messages yet. Start a conversation!</p>
+                                <p>No messages found for this session.</p>
                             </div>
                         )}
-                        
+
                         {conversation.map(message => (
                             <div
                                 key={message.id}
@@ -202,7 +258,7 @@ const ReflectionScreen = () => {
                                 )}
                             </div>
                         ))}
-                        
+
                         {isSending && (
                             <div className="chat-bubble therapist-bubble typing">
                                 <div className="typing-indicator">
@@ -212,41 +268,37 @@ const ReflectionScreen = () => {
                                 </div>
                             </div>
                         )}
-                        
                         <div ref={messagesEndRef} />
                     </div>
 
-                    <div className="message-input-container">
-                        <textarea
-                            value={newMessage}
-                            onChange={(e) => setNewMessage(e.target.value)}
-                            onKeyDown={handleKeyPress}
-                            placeholder="Type your message here..."
-                            className="message-input"
-                            disabled={isSending}
-                        />
-                        <button
-                            onClick={handleSendMessage}
-                            className={`send-button ${isSending ? 'sending' : ''}`}
-                            disabled={!newMessage.trim() || isSending}
-                        >
-                            {isSending ? 'Sending...' : 'Send'}
-                        </button>
-                    </div>
+                    {(!selectedSession || (selectedSession && chatSessions.find(s => s.id === selectedSession)?.isCurrent)) && (
+                        <div className="message-input-container">
+                            <textarea
+                                value={newMessage}
+                                onChange={(e) => setNewMessage(e.target.value)}
+                                onKeyDown={handleKeyPress}
+                                placeholder="Type your message here..."
+                                className="message-input"
+                                disabled={isSending}
+                            />
+                            <button
+                                onClick={handleSendMessage}
+                                className={`send-button ${isSending ? 'sending' : ''}`}
+                                disabled={!newMessage.trim() || isSending}
+                            >
+                                {isSending ? 'Sending...' : 'Send'}
+                            </button>
+                        </div>
+                    )}
 
-                    <button
-                        className="journal-button"
-                        onClick={() => navigate("/journal")}
-                    >
+                    <button className="journal-button" onClick={() => navigate("/journal")}>
                         Start New Journal Entry
                     </button>
                 </div>
 
-                {/* Summary Section (Collapsible) */}
                 {showSummary && (
                     <div className="summary-section">
                         <h2>Summary ({weekDate})</h2>
-                        
                         <div className="summary-content">
                             <div className="category">
                                 <h4>Highs</h4>
@@ -258,7 +310,6 @@ const ReflectionScreen = () => {
                                     ))}
                                 </ul>
                             </div>
-                            
                             <div className="category">
                                 <h4>Lows</h4>
                                 <ul>
@@ -269,7 +320,6 @@ const ReflectionScreen = () => {
                                     ))}
                                 </ul>
                             </div>
-                            
                             <div className="category">
                                 <h4>Emotions & Mindset Shifts</h4>
                                 <ul>

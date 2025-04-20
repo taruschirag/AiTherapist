@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import apiService from '../services/api';
+import { supabase, loginUser, signUpUser, logoutUser } from '../services/supabase';
 
 const AuthContext = createContext({});
-const TOKEN_KEY = 'auth.token';
+const TOKEN_KEY = 'token'; // LocalStorage key for access token
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
@@ -10,89 +10,77 @@ export const AuthProvider = ({ children }) => {
     const [error, setError] = useState(null);
 
     useEffect(() => {
-        // Check for stored token and validate it
-        const checkUser = async () => {
+        const checkSession = async () => {
             try {
-                const token = localStorage.getItem(TOKEN_KEY);
-                if (token) {
-                    // TODO: Add token validation endpoint if needed
-                    setUser({ token }); // For now, just consider having a token as being logged in
+                const { data, error } = await supabase.auth.getUser();
+                if (error) throw error;
+                if (data?.user) {
+                    setUser(data.user);
                 }
-            } catch (e) {
-                console.error('Error checking auth session:', e);
-                setError(e.message);
+            } catch (err) {
+                console.error('Error restoring session:', err);
+                setError(err.message);
             } finally {
                 setLoading(false);
             }
         };
 
-        checkUser();
+        checkSession();
     }, []);
 
     const signUp = async (email, password) => {
         try {
-            const data = await apiService.signup(email, password);
-            console.log("Signup response data:", data); // Debug log to see what's returned
-            
-            // Update user state with authenticated user info
-            setUser(data);
-            
-            // Check for access token and save it
-            if (data.access_token) {
-                console.log("Saving access token to localStorage"); // Debug log
-                localStorage.setItem(TOKEN_KEY, data.access_token);
+            const result = await signUpUser(email, password);
+            if (result?.user) {
+                setUser(result.user);
+                localStorage.setItem(TOKEN_KEY, result.session.access_token);
+                return { data: result.user, error: null };
             } else {
-                console.warn("No access_token found in signup response"); // Warning log
+                throw new Error('Signup failed');
             }
-            
-            return { data, error: null };
         } catch (error) {
-            console.error('Error signing up:', error);
+            console.error('Signup error:', error.message);
             return { data: null, error };
         }
     };
 
     const signIn = async (email, password) => {
         try {
-            const data = await apiService.login(email, password);
-            console.log("Login response data:", data); // Debug log
-            
-            setUser(data);
-            if (data.access_token) {
-                console.log("Saving access token from login to localStorage"); // Debug log
-                localStorage.setItem(TOKEN_KEY, data.access_token);
+            const result = await loginUser(email, password);
+            if (result?.user) {
+                setUser(result.user);
+                localStorage.setItem(TOKEN_KEY, result.session.access_token);
+                return { data: result.user, error: null };
             } else {
-                console.warn("No access_token found in login response");
+                throw new Error('Login failed');
             }
-            
-            return { data, error: null };
         } catch (error) {
-            console.error('Error signing in:', error);
+            console.error('Login error:', error.message);
             return { data: null, error };
         }
     };
 
     const signOut = async () => {
         try {
-            await apiService.logout();
+            await logoutUser();
             localStorage.removeItem(TOKEN_KEY);
             setUser(null);
         } catch (error) {
-            console.error('Error signing out:', error);
+            console.error('Logout error:', error.message);
         }
     };
 
     const value = {
-        signUp,
-        signIn,
-        signOut,
         user,
         loading,
-        error
+        error,
+        signUp,
+        signIn,
+        signOut
     };
 
     if (loading) {
-        return <div>Loading...</div>;
+        return <div>Loading session...</div>;
     }
 
     return (
@@ -104,8 +92,6 @@ export const AuthProvider = ({ children }) => {
 
 export const useAuth = () => {
     const context = useContext(AuthContext);
-    if (context === undefined) {
-        throw new Error('useAuth must be used within an AuthProvider');
-    }
+    if (!context) throw new Error('useAuth must be used within an AuthProvider');
     return context;
-}; 
+};

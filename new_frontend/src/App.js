@@ -12,7 +12,7 @@ import './App.css';
 // Protected Route wrapper
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
-  
+
   if (loading) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -20,11 +20,14 @@ const ProtectedRoute = ({ children }) => {
       </div>
     );
   }
-  
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-  
+
+
+  // change back later
+
+  // if (!user) {
+  //   return <Navigate to="/login" replace />;
+  // }
+
   return children;
 };
 
@@ -53,21 +56,21 @@ function App() {
       <Router>
         <div className="App">
           <Routes>
-            <Route 
-              path="/login" 
+            <Route
+              path="/login"
               element={
                 <PublicRoute>
                   <AuthForm mode="signin" />
                 </PublicRoute>
-              } 
+              }
             />
-            <Route 
-              path="/signup" 
+            <Route
+              path="/signup"
               element={
                 <PublicRoute>
                   <AuthForm mode="signup" />
                 </PublicRoute>
-              } 
+              }
             />
             <Route
               path="/"
