@@ -2,18 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import './JournalPage.css';
-import { motion } from 'framer-motion';
-
 
 function JournalPage() {
-  const user = { id: 'c75c812c-c...' }; // replace with your test UUID
-  const [journalEntries, setJournalEntries] = useState([]);
   const [calendarData, setCalendarData] = useState({
     currentMonth: new Date(),
     journalDates: {}
   });
 
   const [currentEntry, setCurrentEntry] = useState('');
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [selectedDateEntry, setSelectedDateEntry] = useState(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -21,7 +19,6 @@ function JournalPage() {
 
   // 🔍 Fetch user journal entries from Supabase
   const getUserJournals = async (userId) => {
-
     const { data, error } = await supabase
       .from('Journals')
       .select('*')
@@ -36,13 +33,44 @@ function JournalPage() {
     return data;
   };
 
+  // Fetch journal entry for specific date// Fetch journal entry for specific date
+  const getJournalForDate = async (userId, dateString) => { // Renamed 'date' to 'dateString' for clarity
+    // Construct UTC start and end times directly from the YYYY-MM-DD string
+    const startOfDayUTC = `${dateString}T00:00:00.000Z`;
+    const endOfDayUTC = `${dateString}T23:59:59.999Z`;
+
+    console.log(`Querying for date: ${dateString}, UTC Range: ${startOfDayUTC} to ${endOfDayUTC}`); // Add logging
+
+    const { data, error } = await supabase
+      .from('Journals')
+      .select('*')
+      .eq('user_id', userId)
+      // Use the precise UTC strings for the query
+      .gte('created_at', startOfDayUTC)
+      .lte('created_at', endOfDayUTC)
+      .maybeSingle(); // Use maybeSingle() instead of single() to handle 0 or 1 result gracefully without error
+
+    // Note: PGRST116 means "Requested range not satisfiable" which often happens with single()
+    // when no rows are found. maybeSingle() returns null instead of erroring in that case.
+    if (error) {
+      console.error("Failed to fetch journal entry:", error.message);
+      return null;
+    }
+
+    // console.log("Fetched entry:", data); // Add logging
+
+    return data;
+  };
+
+
+
+
   useEffect(() => {
     const fetchJournals = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
       const entries = await getUserJournals(user.id);
-      setJournalEntries(entries);
 
       // Mark journal dates on calendar
       const datesObject = entries.reduce((acc, entry) => {
@@ -62,6 +90,22 @@ function JournalPage() {
     fetchJournals();
   }, []);
 
+  const handleDateClick = async (dateString) => {
+    setSelectedDate(dateString);
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const existingEntry = await getJournalForDate(user.id, dateString);
+    setSelectedDateEntry(existingEntry);
+
+    if (existingEntry) {
+      setCurrentEntry(existingEntry.content);
+    } else {
+      setCurrentEntry('');
+    }
+  };
+
   const handleSubmit = async () => {
     if (!currentEntry.trim()) {
       alert('Please write something in your journal before submitting.');
@@ -75,21 +119,35 @@ function JournalPage() {
     }
 
     try {
-      const { error } = await supabase
-        .from('Journals')
-        .insert([{
-          user_id: user.id,
-          content: currentEntry
-        }]);
+      const entryDate = selectedDate ? new Date(selectedDate) : new Date();
 
-      if (error) throw error;
+      if (selectedDateEntry) {
+        // Update existing entry
+        const { error } = await supabase
+          .from('Journals')
+          .update({ content: currentEntry })
+          .eq('journal_id', selectedDateEntry.journal_id);
 
-      const today = new Date().toISOString().split('T')[0];
+        if (error) throw error;
+      } else {
+        // Create new entry
+        const { error } = await supabase
+          .from('Journals')
+          .insert([{
+            user_id: user.id,
+            content: currentEntry,
+            created_at: entryDate.toISOString()
+          }]);
+
+        if (error) throw error;
+      }
+
+      const dateString = entryDate.toISOString().split('T')[0];
       setCalendarData(prevData => ({
         ...prevData,
         journalDates: {
           ...prevData.journalDates,
-          [today]: true
+          [dateString]: true
         }
       }));
 
@@ -151,18 +209,20 @@ function JournalPage() {
     for (let day = 1; day <= daysCount; day++) {
       const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const hasEntry = calendarData.journalDates[dateString];
+      const isSelected = selectedDate === dateString;
       const isToday = new Date().toDateString() === new Date(year, month, day).toDateString();
 
       let dayClass = "calendar-day";
-      if (hasEntry) {
-        dayClass += " entry-exists"; // Green for days with entries
-      } else {
-        dayClass += " no-entry"; // Red for days without entries
-      }
+      if (hasEntry) dayClass += " has-entry";
+      if (isSelected) dayClass += " selected";
       if (isToday) dayClass += " today";
 
       days.push(
-        <div key={day} className={dayClass}>
+        <div
+          key={day}
+          className={dayClass}
+          onClick={() => handleDateClick(dateString)}
+        >
           {day}
         </div>
       );
@@ -175,7 +235,7 @@ function JournalPage() {
         <div className="calendar-days">{days}</div>
         <div className="calendar-legend">
           <div className="legend-item">
-            <div className="legend-color entry-exists"></div>
+            <div className="legend-color has-entry"></div>
             <span>Journal Entry</span>
           </div>
           <div className="legend-item">
@@ -188,32 +248,27 @@ function JournalPage() {
   };
 
   return (
-    <motion.div
-      className="journal-page-container"
-      initial={{ opacity: 0, y: -50 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.9, ease: 'easeOut' }}>
+    <div className="journal-page-container">
       <div className="journal-content-wrapper">
         <div className="journal-section">
           <h1 className="journal-header">Your Journal</h1>
           <div className="journal-input-area">
-            <h2 className="journal-prompt">How was your day?</h2>
+            <h2 className="journal-prompt">
+              {selectedDate
+                ? `Journal for ${new Date(selectedDate).toLocaleDateString()}`
+                : 'How was your day?'}
+            </h2>
             <textarea
               value={currentEntry}
               onChange={handleEntryChange}
               className="journal-textarea"
-              placeholder="Start writing here..."
+              placeholder={selectedDate
+                ? `Write your journal entry for ${new Date(selectedDate).toLocaleDateString()}...`
+                : "Start writing here..."}
             />
 
-            {journalEntries.map(entry => (
-              <div key={entry.journal_id} className="previous-entry">
-                <p className="entry-content">{entry.content}</p>
-                <p className="entry-timestamp">{new Date(entry.created_at).toLocaleString()}</p>
-              </div>
-            ))}
-
             <button onClick={handleSubmit} className="finish-entry-button">
-              Finish Entry
+              {selectedDateEntry ? 'Update Entry' : 'Finish Entry'}
             </button>
           </div>
         </div>
@@ -222,7 +277,7 @@ function JournalPage() {
           {renderCalendar()}
         </div>
       </div>
-    </motion.div >
+    </div>
   );
 }
 

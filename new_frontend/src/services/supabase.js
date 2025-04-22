@@ -65,3 +65,50 @@ export const getUserJournals = async (userId) => {
 
     return data;
 };
+
+// In supabase.js
+export const getChatMessages = async (sessionId) => {
+    const { data, error } = await supabase
+        .from('ChatMessages')
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: true });
+
+    if (error) {
+        console.error("Failed to fetch chat messages:", error.message);
+        return [];
+    }
+
+    return data;
+};
+// In services/supabase.js (or wherever getUserChatSessions is defined)
+export const getUserChatSessions = async (userId) => {
+    console.log('[getUserChatSessions] Attempting to fetch for userId:', userId); // Log input ID
+    if (!userId) {
+        console.error('[getUserChatSessions] No userId provided.');
+        return [];
+    }
+    try {
+        const { data, error } = await supabase
+            .from('ChatSessions')
+            .select('*') // Ensure you select all necessary columns (id, created_at, notes)
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            // Log the specific error from Supabase
+            console.error('[getUserChatSessions] Supabase error:', error);
+            // Consider re-throwing or returning empty based on how you want to handle errors
+            // throw error; // Option 1: Propagate error
+            return [];   // Option 2: Return empty on error
+        }
+
+        // Log the data received from Supabase *before* returning
+        console.log('[getUserChatSessions] Data received from Supabase:', data);
+        return data || []; // Handle null response
+
+    } catch (catchError) {
+        console.error('[getUserChatSessions] Caught exception:', catchError);
+        return [];
+    }
+};
