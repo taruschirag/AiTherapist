@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
-import { supabase, getUserChatSessions, getChatMessages } from '../services/supabase';
+import apiService from '../services/api';
 import './ReflectionScreen.css';
 
 // --- Helper function to format date (more robust) ---
@@ -34,8 +34,11 @@ const ReflectionScreen = () => {
     const [conversation, setConversation] = useState([]);
     const [newMessage, setNewMessage] = useState("");
     const [isSending, setIsSending] = useState(false);
-    // No need for separate currentSessionId if selectedSessionId handles it
-    // const [currentSessionId, setCurrentSessionId] = useState(null);
+    const [summaryData, setSummaryData] = useState({
+        highs: [],
+        lows: [],
+        emotions: []
+    });
     const messagesEndRef = useRef(null);
 
     // Fetch all chat sessions for the user ONCE and handle today's session
@@ -48,7 +51,8 @@ const ReflectionScreen = () => {
 
             try {
                 console.log("Checking user ID before fetching sessions:", user?.id);
-                let sessions = await getUserChatSessions(user.id);
+                // Use API service instead of direct Supabase call
+                let sessions = await apiService.getUserChatSessions();
                 console.log("Raw sessions received:", sessions);
 
                 // Check if a session for today exists in the fetched list
@@ -63,15 +67,8 @@ const ReflectionScreen = () => {
                 // If no session exists for today, create one
                 if (!todaySession) {
                     console.log("No session found for today. Creating one...");
-                    const { data: newSession, error: createError } = await supabase
-                        .from('ChatSessions')
-                        .insert([{ user_id: user.id }])
-                        .select()
-                        .single();
-
-                    if (createError) {
-                        throw createError;
-                    }
+                    // Use API service to create a new session
+                    const newSession = await apiService.createChatSession();
                     console.log("New session created:", newSession);
                     // Add the new session to the beginning of our list
                     sessions.unshift(newSession); // Add to the front
@@ -135,7 +132,8 @@ const ReflectionScreen = () => {
             setIsLoadingMessages(true); // Indicate message loading
             console.log("Fetching messages for session:", selectedSessionId);
             try {
-                const messages = await getChatMessages(selectedSessionId);
+                // Use API service instead of direct Supabase call
+                const messages = await apiService.getChatMessages(selectedSessionId);
                 console.log("Raw messages received:", messages);
 
                 const formattedMessages = messages.map(msg => ({
@@ -163,7 +161,6 @@ const ReflectionScreen = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [conversation]); // Run when conversation updates
 
-
     const handleSendMessage = async () => {
         if (!newMessage.trim() || isSending || !selectedSessionId) return; // Ensure session is selected
 
@@ -182,60 +179,46 @@ const ReflectionScreen = () => {
             setConversation(prev => [...prev, userMessage]);
             setNewMessage("");
 
-            // --- Save user message ---
-            const { data: savedUserMsg, error: insertError } = await supabase
-                .from('ChatMessages')
-                .insert([{
-                    session_id: sessionId,
-                    user_id: user.id,
-                    content: messageToSend,
-                    role: 'user'
-                }])
-                .select()
-                .single();
+            // Send message using API service
+            const response = await apiService.sendSessionMessage(sessionId, messageToSend);
+            console.log("Message sent, response:", response);
 
-            console.log("Inserting message for session ID:", selectedSessionId, "and user:", user.id);
-            if (insertError) throw insertError;
+            // If the API returns both user and AI messages, replace the optimistic message
+            // and add the AI response
+            if (response.userMessage && response.aiMessage) {
+                setConversation(prev => {
+                    // Replace optimistic message with actual saved one
+                    const updatedConversation = prev.filter(msg => msg.id !== userMessage.id);
 
-            // --- Get AI Response (Replace with actual API call) ---
-            console.log("Simulating AI response...");
-            // await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate delay
-            const aiReplyText = "Thanks for sharing. How did that make you feel?"; // Example response
+                    // Add the saved user message
+                    updatedConversation.push({
+                        id: response.userMessage.chat_id,
+                        text: response.userMessage.content,
+                        isUser: true,
+                        timestamp: new Date(response.userMessage.created_at)
+                    });
 
-            // --- Save AI message ---
-            const { data: savedAiMsg, error: aiInsertError } = await supabase
-                .from('ChatMessages')
-                .insert([{
-                    session_id: sessionId,
-                    user_id: user.id,
-                    content: aiReplyText,
-                    role: 'assistant'
-                }])
-                .select()
-                .single();
+                    // Add the AI response
+                    updatedConversation.push({
+                        id: response.aiMessage.chat_id,
+                        text: response.aiMessage.content,
+                        isUser: false,
+                        timestamp: new Date(response.aiMessage.created_at)
+                    });
 
-            if (aiInsertError) throw aiInsertError;
-
-            // Update UI with actual saved messages (replace optimistic ones if needed)
-            // Or simply add the AI message
-            const aiMessage = {
-                id: savedAiMsg.chat_id, // Use actual ID from DB
-                text: savedAiMsg.content,
-                isUser: false,
-                timestamp: new Date(savedAiMsg.created_at)
-            };
-
-            // Replace optimistic user message with actual one if needed, or just add AI
-            setConversation(prev => {
-                // Option 1: Replace optimistic user message
-                // const updated = prev.map(msg => msg.id === userMessage.id ? { ...userMessage, id: savedUserMsg.chat_id, timestamp: new Date(savedUserMsg.created_at) } : msg);
-                // return [...updated, aiMessage];
-
-                // Option 2: Just add AI message (simpler if optimistic ID isn't strictly needed)
-                return [...prev, aiMessage];
-            });
-
-
+                    return updatedConversation;
+                });
+            } else {
+                // Fallback for current implementation
+                // Add a simulated AI response
+                const aiMessage = {
+                    id: `ai-${Date.now()}`,
+                    text: "Thanks for sharing. How did that make you feel?", // Default response
+                    isUser: false,
+                    timestamp: new Date()
+                };
+                setConversation(prev => [...prev, aiMessage]);
+            }
         } catch (error) {
             console.error('Error sending message:', error);
             // Add user feedback about the error
@@ -246,13 +229,10 @@ const ReflectionScreen = () => {
                 timestamp: new Date()
             };
             setConversation(prev => [...prev, fallback]);
-            // Optionally remove the optimistic user message if send failed
-            // setConversation(prev => prev.filter(msg => msg.id !== userMessage.id));
         } finally {
             setIsSending(false);
         }
     };
-
 
     const handleKeyPress = (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -261,8 +241,42 @@ const ReflectionScreen = () => {
         }
     };
 
-    const toggleSummary = () => {
+    const toggleSummary = async () => {
+        // Only fetch insights if showing summary and we don't have data yet
+        if (!showSummary && (!summaryData.highs.length && !summaryData.lows.length)) {
+            try {
+                const insights = await apiService.getInsights();
+                console.log("Fetched insights:", insights);
+
+                // Here you would parse the insights data and set it
+                // This is a simplified example - you'd need to actually parse the AI's response
+                if (insights.insights && insights.insights !== "No insights available yet.") {
+                    // Parse the AI's text response into structured data
+                    // This is a placeholder - you'd need actual parsing logic
+                    const parsedData = parseInsightsToSummary(insights.insights);
+                    setSummaryData(parsedData);
+                }
+            } catch (error) {
+                console.error("Error fetching insights:", error);
+            }
+        }
+
         setShowSummary(!showSummary);
+    };
+
+    // Helper function to parse insights text into summary data
+    // This is a placeholder - you would need to implement actual parsing logic
+    const parseInsightsToSummary = (insightsText) => {
+        // Example parsing logic - this should be improved based on your AI's output format
+        const highs = ["Completed project phase", "Good workout session"];
+        const lows = ["Felt stressed about deadline", "Missed a meeting"];
+        const emotions = ["Productive but stressed", "Optimistic about weekend"];
+
+        return {
+            highs,
+            lows,
+            emotions
+        };
     };
 
     // Renamed handler for clarity
@@ -296,15 +310,8 @@ const ReflectionScreen = () => {
         return <div className="loading">No reflection sessions found. Start chatting to create one!</div>; // Or a more informative message
     }
 
-
-    // Sample summary data (replace with actual generated summaries)
     const weekDate = "Week of " + new Date().toLocaleDateString();
-    const highs = ["Completed project phase", "Good workout session", "yurd"];
-    const lows = ["Felt stressed about deadline", "Missed a meeting"];
-    const emotions = ["Productive but stressed", "Optimistic about weekend"];
-
     const selectedSessionIsCurrent = chatSessions.find(s => s.id === selectedSessionId)?.isCurrent ?? false;
-
 
     return (
         <div className="reflection-screen">
@@ -333,8 +340,6 @@ const ReflectionScreen = () => {
                                     <div className="session-title">{session.title}</div>
                                     {/* Display the formatted date */}
                                     <div className="session-date">{session.date}</div>
-                                    {/* Preview is optional, could be removed or adjusted */}
-                                    {/* <div className="session-preview">{session.preview}</div> */}
                                 </div>
                             ))
                         )}
@@ -413,22 +418,20 @@ const ReflectionScreen = () => {
                         </div>
                     )}
 
-
                     <button className="journal-button" onClick={() => navigate("/journal")}>
                         Go to Journal
                     </button>
                 </div>
 
-                {/* Summary Section (remains mostly the same) */}
+                {/* Summary Section */}
                 {showSummary && (
                     <div className="summary-section">
                         <h2>Summary ({weekDate})</h2>
-                        {/* ... rest of summary content ... */}
                         <div className="summary-content">
                             <div className="category">
                                 <h4>Highs</h4>
                                 <ul>
-                                    {highs.map((high, index) => (
+                                    {summaryData.highs.map((high, index) => (
                                         <li key={`high-${index}`} className="summary-item">
                                             <span className="checkmark">✓</span> {high}
                                         </li>
@@ -438,7 +441,7 @@ const ReflectionScreen = () => {
                             <div className="category">
                                 <h4>Lows</h4>
                                 <ul>
-                                    {lows.map((low, index) => (
+                                    {summaryData.lows.map((low, index) => (
                                         <li key={`low-${index}`} className="summary-item">
                                             <span className="downmark">✗</span> {low}
                                         </li>
@@ -448,7 +451,7 @@ const ReflectionScreen = () => {
                             <div className="category">
                                 <h4>Emotions & Mindset Shifts</h4>
                                 <ul>
-                                    {emotions.map((emotion, index) => (
+                                    {summaryData.emotions.map((emotion, index) => (
                                         <li key={`emotion-${index}`} className="emotion-item">{emotion}</li>
                                     ))}
                                 </ul>
