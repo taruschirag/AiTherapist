@@ -7,16 +7,21 @@ import os
 from dotenv import load_dotenv
 import logging
 import openai
+from openai import OpenAI
+
 from typing import List, Optional
 from datetime import datetime
 
 # Load environment variables from .env file
 load_dotenv()
 
+
 # Supabase Configuration
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-openai.api_key = os.getenv("OPENAI_API_KEY")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+
 
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -77,8 +82,13 @@ class UserLogin(BaseModel):
     email: str
     password: str
 
+class SessionMessageCreate(BaseModel):
+    message: str
+
 
 # Helper Functions
+
+
 
 
 
@@ -243,7 +253,6 @@ Please provide therapeutic insights, patterns observed, and suggestions for pers
 Focus on emotional patterns, behavioral trends, and potential areas for development."""
 
         logger.info("Sending request to OpenAI")
-        client = openai.OpenAI()  # Create client instance
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -429,9 +438,8 @@ async def chat(message: ChatMessage, user =Depends(get_current_user)):
         logger.info(f"Sending {len(messages)} messages to OpenAI")
         
         # Get response from OpenAI
-        client = openai.OpenAI()
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=messages,
             max_tokens=1000,
             temperature=0.7
@@ -489,3 +497,233 @@ async def get_journal_dates(user =Depends(get_current_user)):
 def health_check():
     logger.info("Health check endpoint hit")
     return {"message": "API is running!"}
+
+@app.get("/api/chat-sessions")
+async def get_user_chat_sessions(user = Depends(get_current_user)):
+    """
+    Retrieves all chat sessions for the currently authenticated user.
+    """
+    user_id = user.id
+    try:
+        logger.info(f"Fetching chat sessions for user {user_id}")
+
+        # Query the ChatSessions table in Supabase
+        response = (
+    supabase.table("ChatSessions")
+    .select("session_id, created_at, notes")
+    .eq("user_id", user_id)
+    .order("created_at", desc=True)
+    .execute()
+)
+
+        # Log the raw response from Supabase for debugging if needed
+        # logger.debug(f"Supabase response for chat sessions: {response}")
+
+        if not response.data:
+            logger.info(f"No chat sessions found for user {user_id}")
+            return {"sessions": []}
+
+        logger.info(f"Retrieved {len(response.data)} chat sessions for user {user_id}")
+        # Return the sessions in the format expected by the frontend
+        return {"sessions": response.data}
+
+    except Exception as e:
+        logger.exception(f"Error retrieving chat sessions for user {user_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve chat sessions: {str(e)}")
+    
+
+    # Add this somewhere with your other route definitions in app.py
+
+@app.post("/api/chat-sessions")
+async def create_chat_session_endpoint(user = Depends(get_current_user)):
+    """
+    Creates a new chat session for the currently authenticated user for the current day,
+    if one doesn't already exist.
+    NOTE: Assumes the unique constraint on (user_id, session_date) is handled
+          by the database or doesn't need explicit handling here if the frontend
+          logic already prevents duplicate calls on the same day.
+          A more robust version might handle unique constraint violations.
+    """
+    user_id = user.id
+    try:
+        logger.info(f"Attempting to create a new chat session for user {user_id}")
+
+        # Insert a new session record.
+        # The unique index unique_user_session_utc_date_idx will prevent duplicates
+        # for the same user on the same UTC day if called multiple times.
+        # We only need to insert the user_id; created_at defaults to now().
+        # response = supabase.table("ChatSessions").insert({
+        #     "user_id": user_id,
+        #     # "notes": "New Session Started" # Optional: Add default notes if desired
+        # }).select("session_id, created_at, notes").execute() # Select the columns needed
+
+        response = supabase.table("ChatSessions").insert({
+    "user_id": user_id,
+    # "notes": "New Session Started" # Optional
+}).execute() # Execute immediately after insert
+
+        # Log the raw response for debugging
+        # logger.debug(f"Supabase response for creating chat session: {response}")
+
+        # Check if data was returned (successful insert)
+        if response.data and len(response.data) > 0:
+            new_session = response.data[0]
+            logger.info(f"Successfully created new chat session {new_session['session_id']} for user {user_id}")
+            # Return the session in the format expected by the frontend
+            return {"session": new_session}
+        else:
+            # This case might happen if the insert failed silently or due to RLS/policy issues
+            # not caught as exceptions, or if the unique constraint was violated but didn't error out cleanly (less likely)
+            logger.error(f"Failed to create or retrieve session data after insert attempt for user {user_id}. Response: {response}")
+            raise HTTPException(status_code=500, detail="Failed to create chat session.")
+
+    except Exception as e:
+        # Catch potential errors, including unique constraint violations if they raise exceptions
+        # You could specifically check for PostgreSQL error codes (e.g., '23505' for unique_violation)
+        # from e.pgcode if using psycopg2 exceptions directly, or parse the error message.
+        logger.exception(f"Error creating chat session for user {user_id}: {str(e)}")
+        # Improve error message if possible, e.g., detect unique violation
+        if "unique constraint" in str(e).lower():
+             raise HTTPException(status_code=409, detail="Chat session for today already exists.") # 409 Conflict
+        raise HTTPException(status_code=500, detail=f"Failed to create chat session: {str(e)}")
+    
+@app.get("/api/chat-sessions/{session_id}/messages")
+async def get_session_messages(session_id: str, user = Depends(get_current_user)):
+    """
+    Retrieves all messages for a specific chat session belonging to the user.
+    """
+    user_id = user.id
+    try:
+        logger.info(f"Fetching messages for session {session_id} for user {user_id}")
+
+        # First, verify the session belongs to the user (optional but good practice)
+        session_check = supabase.table("ChatSessions") \
+            .select("session_id") \
+            .eq("session_id", session_id) \
+            .eq("user_id", user_id) \
+            .limit(1) \
+            .execute()
+
+        if not session_check.data:
+            logger.warning(f"Session {session_id} not found or does not belong to user {user_id}")
+            raise HTTPException(status_code=404, detail="Chat session not found or access denied.")
+
+        # Query the ChatMessages table
+        response = (
+        supabase.table("ChatMessages")
+        .select("*")  # Select all message details
+        .eq("session_id", session_id)
+        .order("created_at", asc=True)  # Order chronologically
+        .execute()
+        )
+
+
+        logger.info(f"Retrieved {len(response.data)} messages for session {session_id}")
+        return {"messages": response.data}
+
+    except Exception as e:
+        logger.exception(f"Error retrieving messages for session {session_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve messages: {str(e)}")
+
+@app.post("/api/chat-sessions/{session_id}/messages")
+async def send_message_to_session(session_id: str, message_data: SessionMessageCreate, user = Depends(get_current_user)):
+    """
+    Adds a user message to a specific chat session and gets an AI response.
+    """
+    user_id = user.id
+    user_message_content = message_data.message
+    try:
+        logger.info(f"Received message for session {session_id} from user {user_id}: {user_message_content[:30]}...")
+
+        # --- 1. Verify session ownership (important!) ---
+        # (Keep this check as is)
+        session_check = supabase.table("ChatSessions") \
+            .select("session_id") \
+            .eq("session_id", session_id) \
+            .eq("user_id", user_id) \
+            .limit(1) \
+            .execute()
+        if not session_check.data:
+            logger.warning(f"Attempt to send message to session {session_id} not owned by user {user_id}")
+            raise HTTPException(status_code=403, detail="Access denied to this chat session.")
+
+        # --- 2. Save User Message ---
+        # REMOVE .select("*") here
+        user_msg_response = supabase.table("ChatMessages").insert({
+            "session_id": session_id,
+            "user_id": user_id,
+            "role": "user",
+            "content": user_message_content,
+            "created_at": datetime.utcnow().isoformat()
+        }).execute() # Execute immediately after insert
+
+        # Check response.data for inserted row
+        if not user_msg_response.data or len(user_msg_response.data) == 0:
+             logger.error(f"Failed to save user message or get data back for session {session_id}. Response: {user_msg_response}")
+             raise HTTPException(status_code=500, detail="Could not save user message.")
+        saved_user_message = user_msg_response.data[0]
+        logger.info(f"Saved user message {saved_user_message.get('chat_id', 'UNKNOWN')} to session {session_id}")
+
+
+        # --- 3. Prepare context for AI ---
+        # (Keep this section as is)
+        history_response = supabase.table("ChatMessages") \
+            .select("role, content") \
+            .eq("session_id", session_id) \
+            .order("created_at", desc=True) \
+            .limit(10) \
+            .execute()
+
+        openai_messages = [
+             {"role": "system", "content": """You are an empathetic AI therapist named Therapost.
+             Focus on reflective listening, asking clarifying questions, and helping the user explore their feelings.
+             Keep responses supportive and concise (1-2 paragraphs). Avoid giving direct advice."""}
+        ]
+        if history_response.data:
+             for msg in reversed(history_response.data):
+                 openai_messages.append({"role": msg['role'], "content": msg['content']})
+
+
+        # --- 4. Call OpenAI ---
+        # (Keep this section as is)
+        logger.info(f"Sending {len(openai_messages)} messages to OpenAI for session {session_id}")
+        ai_completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=openai_messages,
+            max_tokens=300,
+            temperature=0.7
+        )
+        ai_response_content = ai_completion.choices[0].message.content
+        logger.info(f"Received AI response for session {session_id}: {ai_response_content[:30]}...")
+
+        # --- 5. Save AI Message ---
+        # REMOVE .select("*") here
+        ai_msg_response = supabase.table("ChatMessages").insert({
+            "session_id": session_id,
+            "user_id": user_id,
+            "role": "assistant",
+            "content": ai_response_content,
+            "created_at": datetime.utcnow().isoformat()
+        }).execute() # Execute immediately after insert
+
+        # Check response.data for inserted row
+        if not ai_msg_response.data or len(ai_msg_response.data) == 0:
+             logger.error(f"Failed to save AI message or get data back for session {session_id}. Response: {ai_msg_response}")
+             raise HTTPException(status_code=500, detail="Could not save AI response.")
+        saved_ai_message = ai_msg_response.data[0]
+        logger.info(f"Saved AI message {saved_ai_message.get('chat_id', 'UNKNOWN')} to session {session_id}")
+
+
+        # --- 6. Return saved messages ---
+        # (Keep this section as is)
+        return {
+            "userMessage": saved_user_message,
+            "aiMessage": saved_ai_message
+        }
+
+    # (Keep except blocks as is)
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logger.exception(f"Error processing message for session {session_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to process message: {str(e)}")
