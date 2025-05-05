@@ -26,25 +26,39 @@ api.interceptors.request.use(
 );
 
 api.interceptors.response.use(
-    (response) => {
-        // If request is successful, just return the response
-        return response;
-    },
-    (error) => {
-        // Check if the error is due to an expired/invalid token (401 or 403)
-        if (error.response && (error.response.status === 401 || error.response.status === 403)) {
-            console.warn('Authentication error detected (401/403). Redirecting to login.');
-            // Clear potentially invalid token
-            localStorage.removeItem('token');
-            // Redirect to login page
-            // Replace with your actual routing logic
-            window.location.href = '/login'; // Simple redirect
-            // Or use navigate('/login') if you have access to it here
+    response => response,
+    async error => {
+        const original = error.config;
+        const status = error.response?.status;
+
+        // only handle auth errors once
+        if ((status === 401 || status === 403) && !original._retry) {
+            original._retry = true;
+
+            try {
+                // Attempt to get a fresh access token
+                const { data } = await api.post("/api/refresh");
+                localStorage.setItem("token", data.access_token);
+                localStorage.setItem("refresh_token", data.refresh_token);
+
+                // Update the header and retry
+                api.defaults.headers.Authorization = `Bearer ${data.access_token}`;
+                original.headers.Authorization = `Bearer ${data.access_token}`;
+                return api.request(original);
+            } catch (refreshError) {
+                // Refresh failed → fall through to logout
+                console.warn("Token refresh failed, redirecting to login.");
+            }
         }
-        // Return the error so that calling code can still handle it if needed
+
+        // If we get here, either it wasn’t a 401/403, or refresh failed
+        localStorage.removeItem("token");
+        localStorage.removeItem("refresh_token");
+        window.location.href = "/login";
         return Promise.reject(error);
     }
 );
+
 
 // API functions for your app
 export const apiService = {
@@ -127,11 +141,35 @@ export const apiService = {
         return response.data.sessions;
     },
 
+    // services/api.js
     getChatMessages: async (sessionId) => {
-        // You'll need to add this endpoint to your backend
-        const response = await api.get(`/chat-sessions/${sessionId}/messages`);
-        return response.data.messages;
+        try {
+            console.log('Fetching messages for session:', sessionId);
+            const response = await api.get(`/chat-sessions/${sessionId}/messages`);
+            console.log('Axios full response:', response);
+            console.log('…but the real payload is response.data:', response.data);
+
+            // response.data might be:
+            //  • an array of messages: [ { chat_id, content, …}, … ]
+            //  • an object with a `messages` field: { messages: [ … ] }
+            //  • something else entirely
+            // Let’s normalize below.
+
+            const payload = response.data;
+            if (Array.isArray(payload)) {
+                return payload;
+            }
+            if (payload && Array.isArray(payload.messages)) {
+                return payload.messages;
+            }
+            console.warn('getChatMessages: unexpected payload shape, returning empty array');
+            return [];
+        } catch (error) {
+            console.error('Error fetching chat messages:', error);
+            return [];
+        }
     },
+
 
     // Method to send a message in a specific chat session
     sendSessionMessage: async (sessionId, message) => {

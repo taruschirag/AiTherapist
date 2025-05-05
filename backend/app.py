@@ -1,13 +1,20 @@
 import logging.config
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import FastAPI, HTTPException, Request, Header, Depends
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, Request, Header, Depends, status
+from pydantic import BaseModel, Field
 from supabase import create_client, Client
 import os
 from dotenv import load_dotenv
 import logging
 import openai
 from openai import OpenAI
+from fastapi.responses import JSONResponse
+from datetime import date
+from uuid import UUID
+from pydantic import BaseModel, Field, ConfigDict
+from datetime import date
+
+
 
 from typing import List, Optional
 from datetime import datetime
@@ -47,7 +54,7 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -85,6 +92,54 @@ class UserLogin(BaseModel):
 class SessionMessageCreate(BaseModel):
     message: str
 
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+class RefreshResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+
+# ─── Pydantic Schemas ─────────────────────────────────────────────────────
+
+class JournalSummaryCreate(BaseModel):
+    start_date: date
+    end_date: date
+
+class JournalSummaryOut(BaseModel):
+    id: UUID
+    user_id: UUID
+    start_date: date
+    end_date: date
+    summary_text: str
+    inserted_at: datetime
+
+    class Config:
+         model_config = ConfigDict(from_attributes=True)
+
+class ChatSummaryCreate(BaseModel):
+    session_id: UUID
+
+class ChatSummaryOut(BaseModel):
+    id: UUID
+    user_id: UUID
+    session_id: UUID
+    summary_text: str
+    inserted_at: datetime
+
+    class Config:
+         model_config = ConfigDict(from_attributes=True)
+
+class UserProfilePayload(BaseModel):
+    profile_data: dict = Field(..., description="AI-generated user profile blob")
+
+class UserProfileOut(BaseModel):
+    user_id: UUID
+    profile_data: dict
+    updated_at: datetime
+
+    class Config:
+         model_config = ConfigDict(from_attributes=True)
+
 
 # Helper Functions
 
@@ -110,6 +165,42 @@ async def get_current_user(authorization: Optional[str] = Header(None)):
     return response.user  # ✅ Ensure this is an object, not a string
 
 
+@app.post("/api/refresh", response_model=RefreshResponse)
+async def refresh_token(req: RefreshRequest):
+    # Call supabase to rotate the session
+    result = supabase.auth.refresh_session(req.refresh_token)
+
+    # supabase-py returns a dict with 'data' and 'error'
+    err = result.get("error")
+    if err:
+        # Something went wrong on the Supabase side
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Refresh failed: {err}"
+        )
+
+    data = result.get("data") or {}
+    session = data.get("session")
+    if not session:
+        # No session in the payload means refresh failed
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token or session expired."
+        )
+
+    # Optionally, set the new refresh token in an HttpOnly cookie:
+    resp = JSONResponse(content={
+        "access_token": session["access_token"],
+        "refresh_token": session["refresh_token"],
+    })
+    resp.set_cookie(
+        key="refresh_token",
+        value=session["refresh_token"],
+        httponly=True,
+        secure=True,       # False on localhost/http
+        samesite="strict"  # or "lax"
+    )
+    return resp
 
 # **User Signup Route**
 @app.post("/api/signup")
@@ -593,38 +684,62 @@ async def get_session_messages(session_id: str, user = Depends(get_current_user)
     Retrieves all messages for a specific chat session belonging to the user.
     """
     user_id = user.id
-    try:
-        logger.info(f"Fetching messages for session {session_id} for user {user_id}")
 
-        # First, verify the session belongs to the user (optional but good practice)
-        session_check = supabase.table("ChatSessions") \
-            .select("session_id") \
-            .eq("session_id", session_id) \
-            .eq("user_id", user_id) \
-            .limit(1) \
-            .execute()
-
-        if not session_check.data:
-            logger.warning(f"Session {session_id} not found or does not belong to user {user_id}")
-            raise HTTPException(status_code=404, detail="Chat session not found or access denied.")
-
-        # Query the ChatMessages table
-        response = (
-        supabase.table("ChatMessages")
-        .select("*")  # Select all message details
-        .eq("session_id", session_id)
-        .order("created_at", asc=True)  # Order chronologically
+    
+    
+    # —— DEBUG BLOCK ——
+    all_resp = supabase.table("ChatMessages").select("*").execute()
+    logger.info(f"[DEBUG] total ChatMessages rows via supabase-py: {len(all_resp.data)}")
+    logger.debug(f"[DEBUG] sample rows: {all_resp.data[:3] if all_resp.data else []}")
+    
+    filtered = supabase.table("ChatMessages") \
+        .select("*") \
+        .eq("session_id", session_id) \
         .execute()
-        )
+    logger.info(f"[DEBUG] filtered rows for session={session_id}: {len(filtered.data)}")
+    logger.debug(f"[DEBUG] filtered data: {filtered.data}")
+    # —— END DEBUG ——
+    
+    try:
+        # First, verify the session belongs to the user
+        session_check = supabase.table("ChatSessions") \
+            .select("session_id, user_id") \
+            .eq("session_id", session_id) \
+            .execute()
+        
+        logger.info(f"Session check returned {len(session_check.data)} rows: {session_check.data}")
+        
+        # Check if session exists and belongs to user
+        user_session = [s for s in session_check.data if s['user_id'] == user_id]
+        if not user_session:
+            if session_check.data:
+                logger.warning(f"Session {session_id} exists but doesn't belong to user {user_id}")
+            else:
+                logger.warning(f"Session {session_id} not found")
+            return {"messages": []}
+        
+        logger.info(f"Session verified. Found session {session_id} for user {user_id}")
+        
+        # Use the filtered result directly instead of running another query
+        response = filtered
 
-
-        logger.info(f"Retrieved {len(response.data)} messages for session {session_id}")
-        return {"messages": response.data}
+        # Format the response data if needed
+        formatted_messages = []
+        for msg in response.data:
+            formatted_messages.append({
+                "content": msg.get("content"),
+                "role": msg.get("role"),
+                "created_at": msg.get("created_at"),
+                "session_id": msg.get("session_id")
+            })
+        
+        logger.info(f"Retrieved {len(formatted_messages)} messages for session {session_id}")
+        return {"messages": formatted_messages or []}
 
     except Exception as e:
         logger.exception(f"Error retrieving messages for session {session_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve messages: {str(e)}")
-
+        # Return empty array instead of error for better UX
+        return {"messages": []}
 @app.post("/api/chat-sessions/{session_id}/messages")
 async def send_message_to_session(session_id: str, message_data: SessionMessageCreate, user = Depends(get_current_user)):
     """
@@ -727,3 +842,148 @@ async def send_message_to_session(session_id: str, message_data: SessionMessageC
     except Exception as e:
         logger.exception(f"Error processing message for session {session_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to process message: {str(e)}")
+    
+
+@app.post("/api/journal-summaries", response_model=JournalSummaryOut)
+async def create_journal_summary(
+    payload: JournalSummaryCreate,
+    user=Depends(get_current_user)
+):
+    # 1) fetch raw journals
+    journals = supabase.table("Journals") \
+        .select("content_text") \
+        .eq("user_id", user.id) \
+        .gte("journal_date", payload.start_date.isoformat()) \
+        .lte("journal_date", payload.end_date.isoformat()) \
+        .order("journal_date", asc=True) \
+        .execute().data
+
+    # 2) build prompt
+    entries = "\n".join(f"- {j['content_text']}" for j in journals)
+    prompt = (
+        f"As an AI therapist, please summarize the user's journal entries "
+        f"from {payload.start_date} to {payload.end_date}:\n\n{entries}"
+    )
+
+    # 3) call OpenAI
+    ai_resp = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "You are an empathetic summarizer."},
+            {"role": "user", "content": prompt}
+        ],
+        max_tokens=500
+    ).choices[0].message.content
+
+    # 4) persist summary
+    result = supabase.table("JournalSummaries") \
+        .insert([{
+            "user_id":       user.id,
+            "start_date":    payload.start_date.isoformat(),
+            "end_date":      payload.end_date.isoformat(),
+            "summary_text":  ai_resp
+        }]) \
+        .select("*") \
+        .single() \
+        .execute()
+
+    if result.error:
+        raise HTTPException(status_code=500, detail=result.error.message)
+
+    return result.data
+
+@app.get("/api/journal-summaries", response_model=JournalSummaryOut)
+async def get_journal_summary(
+    start_date: date,
+    end_date: date,
+    user=Depends(get_current_user)
+):
+    result = supabase.table("JournalSummaries") \
+        .select("*") \
+        .eq("user_id", user.id) \
+        .eq("start_date", start_date.isoformat()) \
+        .eq("end_date",   end_date.isoformat()) \
+        .single() \
+        .execute()
+
+    if result.error:
+        raise HTTPException(status_code=404, detail="Summary not found")
+    return result.data
+
+@app.post("/api/chat-summaries", response_model=ChatSummaryOut)
+async def create_chat_summary(
+    payload: ChatSummaryCreate,
+    user=Depends(get_current_user)
+):
+    # 1) pull all ChatMessages for that session
+    msgs = supabase.table("ChatMessages") \
+        .select("role,content") \
+        .eq("session_id", payload.session_id) \
+        .order("created_at", asc=True) \
+        .execute().data
+
+    convo = "\n".join(f"{m['role']}: {m['content']}" for m in msgs)
+    prompt = f"Please summarize this conversation:\n\n{convo}"
+
+    ai_resp = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "You are a concise summarizer."},
+            {"role": "user", "content": prompt}
+        ],
+        max_tokens=300
+    ).choices[0].message.content
+
+    result = supabase.table("ChatSummaries") \
+        .insert([{
+            "user_id":     user.id,
+            "session_id":  payload.session_id,
+            "summary_text": ai_resp
+        }]) \
+        .select("*") \
+        .single() \
+        .execute()
+
+    if result.error:
+        raise HTTPException(status_code=500, detail=result.error.message)
+    return result.data
+
+@app.get("/api/chat-summaries", response_model=List[ChatSummaryOut])
+async def list_chat_summaries(user=Depends(get_current_user)):
+    result = supabase.table("ChatSummaries") \
+        .select("*") \
+        .eq("user_id", user.id) \
+        .order("inserted_at", desc=True) \
+        .execute()
+
+    return result.data or []
+
+
+@app.get("/api/user-profile", response_model=UserProfileOut)
+async def get_user_profile(user=Depends(get_current_user)):
+    res = supabase.table("UserProfiles") \
+        .select("*") \
+        .eq("user_id", user.id) \
+        .single() \
+        .execute()
+    if res.error:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return res.data
+
+@app.put("/api/user-profile", response_model=UserProfileOut)
+async def upsert_user_profile(
+    payload: UserProfilePayload,
+    user=Depends(get_current_user)
+):
+    res = supabase.table("UserProfiles") \
+        .upsert([{
+            "user_id":      user.id,
+            "profile_data": payload.profile_data
+        }], on_conflict=["user_id"]) \
+        .select("*") \
+        .single() \
+        .execute()
+
+    if res.error:
+        raise HTTPException(status_code=500, detail=res.error.message)
+    return res.data

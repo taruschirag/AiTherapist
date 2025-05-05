@@ -52,7 +52,8 @@ const ReflectionScreen = () => {
             try {
                 console.log("Checking user ID before fetching sessions:", user?.id);
                 // Use API service instead of direct Supabase call
-                let sessions = await apiService.getUserChatSessions();
+                const response = await apiService.getUserChatSessions();
+                const sessions = response || [];
                 console.log("Raw sessions received:", sessions);
 
                 // Check if a session for today exists in the fetched list
@@ -95,12 +96,15 @@ const ReflectionScreen = () => {
                 console.log("Formatted sessions for display:", formattedSessions);
                 setChatSessions(formattedSessions);
 
-                // Determine which session to select initially
-                if (todaySession) {
+                // Try to restore the last selected session from localStorage
+                const lastSelectedSessionId = localStorage.getItem('lastSelectedSessionId');
+                if (lastSelectedSessionId && formattedSessions.some(s => s.id === lastSelectedSessionId)) {
+                    currentSessionIdToSelect = lastSelectedSessionId;
+                    console.log("Restoring last selected session:", currentSessionIdToSelect);
+                } else if (todaySession) {
                     currentSessionIdToSelect = todaySession.session_id;
                     console.log("Selecting today's session:", currentSessionIdToSelect);
                 } else if (formattedSessions.length > 0) {
-                    // If somehow today's session wasn't found/created, select the latest
                     currentSessionIdToSelect = formattedSessions[0].id;
                     console.log("Selecting the latest session:", currentSessionIdToSelect);
                 } else {
@@ -118,8 +122,7 @@ const ReflectionScreen = () => {
         };
 
         fetchAndInitializeSessions();
-        // Dependency array ensures this runs when the user object is available/changes
-    }, [user]);
+    }, [user]); // Dependency array ensures this runs when the user object is available/changes
 
     // Fetch messages when the selected session changes
     useEffect(() => {
@@ -132,29 +135,45 @@ const ReflectionScreen = () => {
             setIsLoadingMessages(true); // Indicate message loading
             console.log("Fetching messages for session:", selectedSessionId);
             try {
-                // Use API service instead of direct Supabase call
+                // Get messages from API
                 const messages = await apiService.getChatMessages(selectedSessionId);
-                console.log("Raw messages received:", messages);
+                console.log("Messages received from API:", messages);
 
+                // Format messages for display
                 const formattedMessages = messages.map(msg => ({
                     id: msg.chat_id,
                     text: msg.content,
                     isUser: msg.role === 'user',
                     timestamp: new Date(msg.created_at)
-                })).sort((a, b) => a.timestamp - b.timestamp); // Ensure messages are chronological
+                }));
 
-                console.log("Formatted messages:", formattedMessages);
+                console.log("Formatted messages for display:", formattedMessages);
                 setConversation(formattedMessages);
             } catch (error) {
-                console.error(`Error fetching messages for session ${selectedSessionId}:`, error);
-                setConversation([]); // Clear conversation on error
+                console.error("Error fetching messages:", error);
+                setConversation([]); // Reset on error
             } finally {
-                setIsLoadingMessages(false); // Stop message loading
+                setIsLoadingMessages(false);
             }
         };
 
-        fetchMessages();
-    }, [selectedSessionId]); // Re-run ONLY when selectedSessionId changes
+        if (selectedSessionId) {
+            console.log("Selected session changed, fetching messages for:", selectedSessionId);
+            fetchMessages();
+        }
+    }, [selectedSessionId]); // Only re-run when selectedSessionId changes
+
+    // Add debug logging for conversation changes
+    useEffect(() => {
+        console.log("Conversation state updated:", conversation);
+    }, [conversation]);
+
+    // Save selected session ID to localStorage whenever it changes
+    useEffect(() => {
+        if (selectedSessionId) {
+            localStorage.setItem('lastSelectedSessionId', selectedSessionId);
+        }
+    }, [selectedSessionId]);
 
     // Scroll to bottom effect
     useEffect(() => {
@@ -164,18 +183,20 @@ const ReflectionScreen = () => {
     const handleSendMessage = async () => {
         if (!newMessage.trim() || isSending || !selectedSessionId) return; // Ensure session is selected
 
+        // Create the message object outside try block so it's accessible in catch
+        const messageToSend = newMessage.trim();
+        const userMessage = {
+            id: `temp-${Date.now()}`, // Temporary ID
+            text: messageToSend,
+            isUser: true,
+            timestamp: new Date()
+        };
+
         try {
             setIsSending(true);
-            const messageToSend = newMessage.trim();
             const sessionId = selectedSessionId; // Use the currently selected session
 
             // Optimistic UI update for user message
-            const userMessage = {
-                id: `temp-${Date.now()}`, // Temporary ID
-                text: messageToSend,
-                isUser: true,
-                timestamp: new Date()
-            };
             setConversation(prev => [...prev, userMessage]);
             setNewMessage("");
 
@@ -183,52 +204,56 @@ const ReflectionScreen = () => {
             const response = await apiService.sendSessionMessage(sessionId, messageToSend);
             console.log("Message sent, response:", response);
 
-            // If the API returns both user and AI messages, replace the optimistic message
-            // and add the AI response
+            // If the API returns both user and AI messages, update the conversation
             if (response.userMessage && response.aiMessage) {
                 setConversation(prev => {
-                    // Replace optimistic message with actual saved one
-                    const updatedConversation = prev.filter(msg => msg.id !== userMessage.id);
+                    // Remove the optimistic message
+                    const withoutOptimistic = prev.filter(msg => msg.id !== userMessage.id);
 
-                    // Add the saved user message
-                    updatedConversation.push({
-                        id: response.userMessage.chat_id,
-                        text: response.userMessage.content,
-                        isUser: true,
-                        timestamp: new Date(response.userMessage.created_at)
-                    });
-
-                    // Add the AI response
-                    updatedConversation.push({
-                        id: response.aiMessage.chat_id,
-                        text: response.aiMessage.content,
-                        isUser: false,
-                        timestamp: new Date(response.aiMessage.created_at)
-                    });
-
-                    return updatedConversation;
+                    // Add both the confirmed user message and AI response
+                    return [
+                        ...withoutOptimistic,
+                        {
+                            id: response.userMessage.chat_id,
+                            text: response.userMessage.content,
+                            isUser: true,
+                            timestamp: new Date(response.userMessage.created_at)
+                        },
+                        {
+                            id: response.aiMessage.chat_id,
+                            text: response.aiMessage.content,
+                            isUser: false,
+                            timestamp: new Date(response.aiMessage.created_at)
+                        }
+                    ];
                 });
             } else {
-                // Fallback for current implementation
-                // Add a simulated AI response
-                const aiMessage = {
-                    id: `ai-${Date.now()}`,
-                    text: "Thanks for sharing. How did that make you feel?", // Default response
-                    isUser: false,
-                    timestamp: new Date()
-                };
-                setConversation(prev => [...prev, aiMessage]);
+                // If we don't get both messages back, refresh the entire conversation
+                const refreshResponse = await apiService.getChatMessages(sessionId);
+                if (refreshResponse?.messages) {
+                    const refreshedMessages = refreshResponse.messages
+                        .filter(msg => msg && msg.content && msg.role)
+                        .map(msg => ({
+                            id: msg.chat_id,
+                            text: msg.content,
+                            isUser: msg.role === 'user',
+                            timestamp: new Date(msg.created_at)
+                        }))
+                        .sort((a, b) => a.timestamp - b.timestamp);
+                    setConversation(refreshedMessages);
+                }
             }
         } catch (error) {
             console.error('Error sending message:', error);
-            // Add user feedback about the error
-            const fallback = {
+            // Remove the optimistic message and show error
+            setConversation(prev => prev.filter(msg => msg.id !== userMessage.id));
+            // Add error message
+            setConversation(prev => [...prev, {
                 id: `error-${Date.now()}`,
                 text: "Sorry, couldn't send message. Please try again.",
-                isUser: false, // Or style as an error message
+                isUser: false,
                 timestamp: new Date()
-            };
-            setConversation(prev => [...prev, fallback]);
+            }]);
         } finally {
             setIsSending(false);
         }

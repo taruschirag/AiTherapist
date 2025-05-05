@@ -1,0 +1,113 @@
+.welcome-card-overlay {
+    position: fixed; /* Or absolute if within a specific container */
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000; /* Ensure it's on top */
+    padding: 20px;
+  }
+  
+  .welcome-card {
+    background-color: #ffffff;
+    padding: 40px 30px;
+    border-radius: 12px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15);
+    text-align: center;
+    max-width: 450px;
+    width: 100%;
+    font-family: 'Inter', sans-serif; /* Or your preferred font */
+    color: #333;
+    line-height: 1.6;
+    animation: fadeIn 0.3s ease-out;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  
+  .welcome-emoji {
+    font-size: 2rem;
+    margin-bottom: 15px;
+  }
+  
+  .welcome-text {
+    margin-bottom: 10px;
+    font-size: 1.1rem;
+  }
+  
+  .welcome-text.small {
+    font-size: 1rem;
+    color: #555;
+    margin-bottom: 5px;
+  }
+  
+  .welcome-text.bold {
+    font-weight: 600;
+    margin-top: 15px;
+    margin-bottom: 15px;
+    font-size: 1.15rem;
+  }
+  
+  .app-name {
+    font-weight: 600;
+  }
+  
+  .welcome-love {
+    margin-top: 25px;
+    font-style: italic;
+    color: #666;
+    margin-bottom: 5px;
+  }
+  
+  .welcome-signature {
+    font-family: 'Caveat', cursive; /* Example handwritten font */
+    font-size: 1.8rem;
+    margin-bottom: 30px;
+    color: #222;
+  }
+  
+  .welcome-actions {
+    display: flex;
+    justify-content: space-between; /* Pushes buttons to ends */
+    align-items: center;
+    margin-top: 20px;
+    padding: 0 10px; /* Add some padding */
+  }
+  
+  .welcome-button {
+    padding: 10px 25px;
+    border: none;
+    border-radius: 20px; /* Pill shape */
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 500;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+  }
+  
+  .welcome-button:active {
+      transform: scale(0.97);
+  }
+  
+  .welcome-button.skip {
+    background-color: #e9ecef;
+    color: #495057;
+  }
+  
+  .welcome-button.skip:hover {
+    background-color: #dee2e6;
+  }
+  
+  .welcome-button.next {
+    background-color: #ffc107; /* Yellow color */
+    color: #333;
+  }
+  
+  .welcome-button.next:hover {
+    background-color: #e0a800;
+  }

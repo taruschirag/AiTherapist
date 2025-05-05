@@ -1,9 +1,46 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import WelcomeMessageCard from '../components/WelcomeMessageCard';
+
 import './HomeScreen.css';
 
 const HomeScreen = () => {
     const navigate = useNavigate();
+    const [quote, setQuote] = useState({ text: "Loading quote...", author: "" });
+    const [showWelcome, setShowWelcome] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        const welcomeSeen = localStorage.getItem('hasSeenWelcomeMessage');
+        if (!welcomeSeen) {
+            setShowWelcome(true);
+        }
+        setIsLoading(false);
+
+        fetchQuote();
+    }, []);
+
+    const fetchQuote = () => {
+        setQuote({
+            text: "The journey of a thousand miles begins with a single step.",
+            author: "Lao Tzu"
+        });
+    };
+
+    const handleWelcomeComplete = () => {
+        localStorage.setItem('hasSeenWelcomeMessage', 'true');
+        setShowWelcome(false);
+    };
+
+    if (isLoading) {
+        return <div className="loading-screen">Loading...</div>;
+    }
+
+    if (showWelcome) {
+        return <WelcomeMessageCard onComplete={handleWelcomeComplete} />;
+    }
+
+
 
     const features = [
         {
@@ -36,8 +73,8 @@ const HomeScreen = () => {
 
                 <div className="features-grid">
                     {features.map((feature, index) => (
-                        <div 
-                            key={index} 
+                        <div
+                            key={index}
                             className="feature-card"
                             onClick={() => navigate(feature.route)}
                         >
