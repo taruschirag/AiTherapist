@@ -92,7 +92,7 @@ class AITherapist:
             suggested_actions=suggested_actions[:3]
         )
 
-    @staticmethod
+    @staticmethod    
     def continue_conversation(message: str) -> str:
         try:
             response = client.chat.completions.create(

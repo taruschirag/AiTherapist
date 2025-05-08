@@ -3,129 +3,164 @@
     background-color: #E5DED3;
     display: flex;
     flex-direction: column;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 .header {
-    padding: 20px;
+    padding: 24px 32px;
     text-align: center;
-    border-bottom: 1px solid #D0C9BD;
+    background-color: #B1BEA6;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border-bottom-left-radius: 12px;
+    border-bottom-right-radius: 12px;
 }
 
 .header h1 {
-    font-size: 24px;
-    font-weight: bold;
+    font-size: 28px;
+    font-weight: 700;
     color: #333;
+    margin: 0 0 8px 0;
+}
+
+.profile-date {
+    font-size: 14px;
+    color: #555;
     margin: 0;
 }
 
 .content {
     flex: 1;
-    overflow-y: auto;
-    padding: 20px;
+    padding: 24px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    align-items: center;
 }
 
-.summary-content {
-    max-width: 800px;
-    margin: 0 auto;
+.profile-card {
+    background-color: #fff;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    width: 100%;
+    max-width: 600px;
 }
 
-.summary-title {
-    font-size: 22px;
-    font-weight: bold;
-    margin-bottom: 15px;
-    text-align: right;
+.profile-section-title {
+    font-size: 20px;
+    font-weight: 600;
     color: #333;
+    margin: 0 0 24px 0;
+    text-align: center;
+    border-bottom: 2px solid #E5DED3;
+    padding-bottom: 12px;
 }
 
-.section {
-    background-color: #F5F5F5;
-    border-radius: 15px;
-    padding: 20px;
+.assessment-item {
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #E5DED3;
+}
+
+.assessment-item:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.assessment-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.assessment-category, .strength-title, .weakness-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+    margin: 0;
+}
+
+.strength-item, .weakness-item {
     margin-bottom: 20px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    padding-bottom: 16px;
+    border-bottom: 1px solid #E5DED3;
 }
 
-.section-title {
-    font-size: 18px;
-    font-weight: 600;
-    margin-bottom: 15px;
-    color: #333;
+.strength-item:last-child, .weakness-item:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
 }
 
-.category-title {
-    font-size: 16px;
-    font-weight: 600;
-    margin-top: 20px;
-    margin-bottom: 10px;
-    color: #333;
+.strength-description, .weakness-description {
+    font-size: 15px;
+    line-height: 1.5;
+    color: #555;
+    margin: 8px 0 0 0;
 }
 
-.summary-item {
-    background-color: #FFFFFF;
-    border-radius: 10px;
-    padding: 15px;
-    margin: 8px 0;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+.score-bar-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
-.summary-item p {
-    margin: 0;
-    font-size: 14px;
-    color: #333;
-    line-height: 1.4;
+.score-bar-background {
+    height: 10px;
+    width: 120px;
+    background-color: #E5DED3;
+    border-radius: 5px;
+    overflow: hidden;
 }
 
-.conversation-container {
-    margin-top: 20px;
-}
-
-.conversation-title {
-    font-size: 18px;
-    font-weight: 600;
-    margin-bottom: 15px;
-    color: #333;
-}
-
-.chat-bubble {
-    border-radius: 20px;
-    padding: 15px;
-    margin: 8px 0;
-    max-width: 80%;
-    position: relative;
-}
-
-.chat-bubble p {
-    margin: 0;
-    font-size: 14px;
-    color: #333;
-    line-height: 1.4;
-}
-
-.user-bubble {
-    background-color: #D0C9BD;
-    margin-left: auto;
-    border-bottom-right-radius: 5px;
-}
-
-.therapist-bubble {
+.score-bar-fill {
+    height: 100%;
     background-color: #B1BEA6;
-    margin-right: auto;
-    border-bottom-left-radius: 5px;
+    border-radius: 5px;
+    transition: width 0.5s ease;
+}
+
+.score-text {
+    font-size: 14px;
+    font-weight: 600;
+    color: #555;
+    min-width: 36px;
+}
+
+.assessment-description {
+    font-size: 15px;
+    line-height: 1.5;
+    color: #555;
+    margin: 0;
 }
 
 .journal-button {
     background-color: #B1BEA6;
-    padding: 15px 30px;
-    border-radius: 25px;
-    margin: 20px auto;
-    border: none;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 16px;
     color: #333;
-    transition: background-color 0.2s ease;
+    font-weight: 600;
+    padding: 14px 28px;
+    border: none;
+    border-radius: 24px;
+    font-size: 16px;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+    margin-top: 16px;
 }
 
 .journal-button:hover {
     background-color: #9DAA92;
-} 
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    font-size: 18px;
+    color: #555;
+}

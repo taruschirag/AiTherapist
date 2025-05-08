@@ -1,5 +1,7 @@
 // src/services/api.js
 import axios from 'axios';
+import { supabase } from './supabase';
+import { useState } from 'react';
 
 const API_URL = 'http://localhost:8000/api';
 
@@ -13,8 +15,28 @@ const api = axios.create({
 
 // Add interceptor to add auth token to requests
 api.interceptors.request.use(
-    (config) => {
-        const token = localStorage.getItem('token'); // Match your existing token key from supabase.js
+    async (config) => {
+        // Try localStorage first, then fall back to Supabase session
+        let token = localStorage.getItem('token');
+        if (!token) {
+            // Try to get from Supabase session
+            const { data: { session } = {} } = await supabase.auth.getSession();
+            token = session?.access_token;
+        }
+        if (!token) {
+            // Fallback: detect Supabase-js internal storage key
+            for (const key of Object.keys(localStorage)) {
+                if (key.endsWith('-auth-token')) {
+                    try {
+                        const parsed = JSON.parse(localStorage.getItem(key));
+                        token = parsed?.access_token;
+                    } catch {
+                        // ignore parse errors
+                    }
+                    break;
+                }
+            }
+        }
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
@@ -36,10 +58,10 @@ api.interceptors.response.use(
             original._retry = true;
 
             try {
-                // Attempt to get a fresh access token
-                const { data } = await api.post("/api/refresh");
-                localStorage.setItem("token", data.access_token);
-                localStorage.setItem("refresh_token", data.refresh_token);
+                const refreshToken = localStorage.getItem('refresh_token');
+                const { data } = await api.post('/refresh', { refresh_token: refreshToken });
+                localStorage.setItem('token', data.access_token);
+                localStorage.setItem('refresh_token', data.refresh_token);
 
                 // Update the header and retry
                 api.defaults.headers.Authorization = `Bearer ${data.access_token}`;
@@ -51,9 +73,9 @@ api.interceptors.response.use(
             }
         }
 
-        // If we get here, either it wasn’t a 401/403, or refresh failed
-        localStorage.removeItem("token");
-        localStorage.removeItem("refresh_token");
+        // If we get here, either it wasn't a 401/403, or refresh failed
+        localStorage.removeItem('token');
+        localStorage.removeItem('refresh_token');
         window.location.href = "/login";
         return Promise.reject(error);
     }
@@ -67,6 +89,7 @@ export const apiService = {
         const response = await api.post('/login', { email, password });
         if (response.data.access_token) {
             localStorage.setItem('token', response.data.access_token);
+            localStorage.setItem('refresh_token', response.data.refresh_token);
         }
         return response.data;
     },
@@ -76,6 +99,7 @@ export const apiService = {
             const response = await api.post('/signup', { email, password });
             if (response.data.access_token) {
                 localStorage.setItem('token', response.data.access_token);
+                localStorage.setItem('refresh_token', response.data.refresh_token);
             } else {
                 console.warn('No access token in signup response:', response.data);
             }
@@ -153,7 +177,7 @@ export const apiService = {
             //  • an array of messages: [ { chat_id, content, …}, … ]
             //  • an object with a `messages` field: { messages: [ … ] }
             //  • something else entirely
-            // Let’s normalize below.
+            // Let's normalize below.
 
             const payload = response.data;
             if (Array.isArray(payload)) {
@@ -202,6 +226,23 @@ export const apiService = {
         return response.data;
     },
 
+    // Fetch a journal summary for a given date range
+    getJournalSummary: async (startDate, endDate) => {
+        const response = await api.get(
+            `/journal-summaries?start_date=${startDate}&end_date=${endDate}`
+        );
+        return response.data;
+    },
+
+    // Create a journal summary for a given date range
+    createJournalSummary: async (startDate, endDate) => {
+        const response = await api.post('/journal-summaries', {
+            start_date: startDate,
+            end_date: endDate
+        });
+        return response.data;
+    },
+
     // Check if user is authenticated (protected route)
     checkAuth: async () => {
         try {
@@ -210,6 +251,11 @@ export const apiService = {
         } catch (error) {
             return { isAuthenticated: false, user: null };
         }
+    },
+
+    getUserProfile: async () => {
+        const response = await api.get('/user-profile');
+        return response.data;  // { user_id, profile_data, updated_at }
     }
 };
 

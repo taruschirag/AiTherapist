@@ -40,6 +40,7 @@ const ReflectionScreen = () => {
         emotions: []
     });
     const messagesEndRef = useRef(null);
+    const [journalSummary, setJournalSummary] = useState(null);
 
     // Fetch all chat sessions for the user ONCE and handle today's session
     useEffect(() => {
@@ -267,42 +268,37 @@ const ReflectionScreen = () => {
     };
 
     const toggleSummary = async () => {
-        // Only fetch insights if showing summary and we don't have data yet
-        if (!showSummary && (!summaryData.highs.length && !summaryData.lows.length)) {
+        // If we’re about to open, and haven’t loaded yet:
+        if (!showSummary && !journalSummary) {
             try {
-                const insights = await apiService.getInsights();
-                console.log("Fetched insights:", insights);
+                const today = new Date()
+                const endDate = today.toISOString().slice(0, 10)
+                const start = new Date(); start.setDate(today.getDate() - 6)
+                const startDate = start.toISOString().slice(0, 10)
 
-                // Here you would parse the insights data and set it
-                // This is a simplified example - you'd need to actually parse the AI's response
-                if (insights.insights && insights.insights !== "No insights available yet.") {
-                    // Parse the AI's text response into structured data
-                    // This is a placeholder - you'd need actual parsing logic
-                    const parsedData = parseInsightsToSummary(insights.insights);
-                    setSummaryData(parsedData);
+                // try GET, fall back to POST
+                let summary
+                try {
+                    summary = await apiService.getJournalSummary(startDate, endDate)
+                } catch (err) {
+                    if (err.response?.status === 404) {
+                        summary = await apiService.createJournalSummary(startDate, endDate)
+                    } else {
+                        throw err
+                    }
                 }
-            } catch (error) {
-                console.error("Error fetching insights:", error);
+
+                console.log("Fetched or created journal summary:", summary)
+                setJournalSummary(summary)
+
+            } catch (e) {
+                console.error("Error fetching summary:", e)
             }
         }
 
-        setShowSummary(!showSummary);
-    };
+        setShowSummary(s => !s)
+    }
 
-    // Helper function to parse insights text into summary data
-    // This is a placeholder - you would need to implement actual parsing logic
-    const parseInsightsToSummary = (insightsText) => {
-        // Example parsing logic - this should be improved based on your AI's output format
-        const highs = ["Completed project phase", "Good workout session"];
-        const lows = ["Felt stressed about deadline", "Missed a meeting"];
-        const emotions = ["Productive but stressed", "Optimistic about weekend"];
-
-        return {
-            highs,
-            lows,
-            emotions
-        };
-    };
 
     // Renamed handler for clarity
     const handleSessionClick = (sessionId) => {
@@ -453,37 +449,18 @@ const ReflectionScreen = () => {
                     <div className="summary-section">
                         <h2>Summary ({weekDate})</h2>
                         <div className="summary-content">
-                            <div className="category">
-                                <h4>Highs</h4>
-                                <ul>
-                                    {summaryData.highs.map((high, index) => (
-                                        <li key={`high-${index}`} className="summary-item">
-                                            <span className="checkmark">✓</span> {high}
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                            <div className="category">
-                                <h4>Lows</h4>
-                                <ul>
-                                    {summaryData.lows.map((low, index) => (
-                                        <li key={`low-${index}`} className="summary-item">
-                                            <span className="downmark">✗</span> {low}
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                            <div className="category">
-                                <h4>Emotions & Mindset Shifts</h4>
-                                <ul>
-                                    {summaryData.emotions.map((emotion, index) => (
-                                        <li key={`emotion-${index}`} className="emotion-item">{emotion}</li>
-                                    ))}
-                                </ul>
-                            </div>
+                            <p>
+                                From {journalSummary.start_date} to {journalSummary.end_date}
+                            </p>
+                            <p>{journalSummary.summary_text}</p>
+
+
                         </div>
                     </div>
                 )}
+
+
+
             </div>
         </div>
     );

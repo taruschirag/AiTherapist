@@ -1,104 +1,106 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import apiService from '../services/api';
 import './SummaryScreen.css';
 
 const SummaryScreen = () => {
-    const navigate = useNavigate();
-    const weekDate = "Week of March 05";
+    const [profileData, setProfileData] = useState(null);
 
-    const highs = [
-        "Refined User Acquisition Strategy - Broke down tasks into smaller steps to stay motivated.",
-        "Proactive Decision-Making - Started researching San Francisco housing & networking opportunities.",
-        "Reframed Perspective on Research - Found ways to connect Capital One work to long-term goals.",
-        "Took Action Instead of Overthinking - Created a structured action plan for startup growth."
-    ];
+    useEffect(() => {
+        apiService.getUserProfile()
+            .then(data => {
+                console.log("Received profile data from backend:", data);
+                setProfileData(data.profile_data);
+            })
+            .catch(err => console.error('Failed to load profile:', err));
+    }, []);
 
-    const lows = [
-        "Feeling Stuck & Doubting Progress - Frustrated with slow traction on AI therapist app.",
-        "Uncertainty About the Future - Struggled with indecision about moving to SF for the summer.",
-        "Lack of Immediate Validation - Questioned whether the startup was valuable without users.",
-        "Overwhelmed by Comparisons - Felt behind on securing an internship, funding, or accelerator spots."
-    ];
+    if (!profileData) {
+        return <div className="loading">Loading profile...</div>;
+    }
 
-    const emotions = [
-        "Frustration & Self-Doubt - Questioned startup progress & research relevance.",
-        "Uncertainty & Hesitation - Struggled with decision-making around future plans."
-    ];
+    // Use metadata.created_at if present, else fallback
+    const createdAt = profileData.metadata?.created_at || profileData.created_at;
 
-    const conversation = [
-        {
-            id: 1,
-            text: "I just had a really hard day today. I had an exam and I got my grade back for one of the classes",
-            isUser: true
-        },
-        {
-            id: 2,
-            text: "Gotcha, Chirag. That sounds like a rough day, and I know it sucks when things pile up like this. ❤️ But listen, one bad exam or a few midterms don't define you. You're out here doing research, building a startup, and pushing yourself in ways most people don't. That takes real grit. 💪",
-            isUser: false
-        },
-        {
-            id: 3,
-            text: "Right now, I'd say take a deep breath, maybe step away from everything for a bit. 💎 Go for a walk, hit the gym, watch a show—something to reset. You're carrying a lot on your shoulders, and it's okay to pause.",
-            isUser: false
-        },
-        {
-            id: 4,
-            text: "Also, if you want, we can come up with a game plan—whether it's bouncing back on grades, shifting focus to what really matters, or just figuring out how to make tomorrow better. ✨ What's the move?",
-            isUser: false
-        }
-    ];
+    // Ratings/assessments array (may be called ratings or assessments)
+    const assessments = profileData.ratings || profileData.assessments || [];
 
-    const renderSummaryItem = (item, index) => (
-        <div key={index} className="summary-item">
-            <p>{item}</p>
-        </div>
-    );
+    // Strengths and weaknesses (object of key: value)
+    const strengths = profileData.strengths || {};
+    const weaknesses = profileData.weaknesses || {};
 
-    const renderChatMessage = (message) => (
-        <div
-            key={message.id}
-            className={`chat-bubble ${message.isUser ? 'user-bubble' : 'therapist-bubble'}`}
-        >
-            <p>{message.text}</p>
-        </div>
-    );
+    const renderScoreBar = (score, maxScore) => {
+        const percentage = (score / maxScore) * 100;
+        return (
+            <div className="score-bar-container">
+                <div className="score-bar-background">
+                    <div
+                        className="score-bar-fill"
+                        style={{ width: `${percentage}%` }}
+                    ></div>
+                </div>
+                <div className="score-text">{score}/{maxScore}</div>
+            </div>
+        );
+    };
+
+    const handleJournalClick = () => {
+        window.location.href = '/journal';
+    };
 
     return (
         <div className="summary-container">
             <div className="header">
-                <h1>Chirag's Reflection Corner</h1>
+                <h1>{profileData.name}'s Profile</h1>
+                {createdAt && (
+                    <p className="profile-date">Created: {new Date(createdAt).toLocaleDateString()}</p>
+                )}
             </div>
 
             <div className="content">
-                <div className="summary-content">
-                    <h2 className="summary-title">Summary ({weekDate})</h2>
-
-                    <div className="section">
-                        <h3 className="section-title">📝 Weekly Reflection Summary (Days 1-4)</h3>
-
-                        <h4 className="category-title">↗️ Highs:</h4>
-                        {highs.map((high, index) => renderSummaryItem(high, index))}
-
-                        <h4 className="category-title">↘️ Lows:</h4>
-                        {lows.map((low, index) => renderSummaryItem(low, index))}
-
-                        <h4 className="category-title">🔄 Emotions & Mindset Shifts:</h4>
-                        {emotions.map((emotion, index) => renderSummaryItem(emotion, index))}
-                    </div>
-
-                    <div className="conversation-container">
-                        <h3 className="conversation-title">Recent Conversation:</h3>
-                        {conversation.map(renderChatMessage)}
-                    </div>
+                <div className="profile-card">
+                    <h2 className="profile-section-title">Assessment Summary</h2>
+                    {Array.isArray(assessments) && assessments.map((assessment, index) => (
+                        <div key={index} className="assessment-item">
+                            <div className="assessment-header">
+                                <h3 className="assessment-category">{assessment.category}</h3>
+                                {renderScoreBar(assessment.score, assessment.max_score || assessment.maxScore)}
+                            </div>
+                            <p className="assessment-description">{assessment.description}</p>
+                        </div>
+                    ))}
                 </div>
-            </div>
 
-            <button
-                className="journal-button"
-                onClick={() => navigate('/journal')}
-            >
-                Start New Journal Entry
-            </button>
+                {Object.keys(strengths).length > 0 && (
+                    <div className="profile-card">
+                        <h2 className="profile-section-title">Strengths</h2>
+                        {Object.entries(strengths).map(([key, value]) => (
+                            <div key={key} className="strength-item">
+                                <h3 className="strength-title">{key.replace(/_/g, ' ')}</h3>
+                                <p className="strength-description">{value}</p>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {Object.keys(weaknesses).length > 0 && (
+                    <div className="profile-card">
+                        <h2 className="profile-section-title">Weaknesses</h2>
+                        {Object.entries(weaknesses).map(([key, value]) => (
+                            <div key={key} className="weakness-item">
+                                <h3 className="weakness-title">{key.replace(/_/g, ' ')}</h3>
+                                <p className="weakness-description">{value}</p>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                <button
+                    className="journal-button"
+                    onClick={handleJournalClick}
+                >
+                    Start New Journal Entry
+                </button>
+            </div>
         </div>
     );
 };

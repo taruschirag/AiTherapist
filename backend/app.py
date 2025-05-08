@@ -13,9 +13,6 @@ from datetime import date
 from uuid import UUID
 from pydantic import BaseModel, Field, ConfigDict
 from datetime import date
-
-
-
 from typing import List, Optional
 from datetime import datetime
 
@@ -63,15 +60,7 @@ app.add_middleware(
 # Request Models
 
 
-class Goals(BaseModel):
-    yearly: str
-    monthly: str
-    weekly: str
 
-
-class GoalsJournalsRequest(BaseModel):
-    goals: Goals
-    journal: str
 
 class Message(BaseModel):
     role: str
@@ -106,12 +95,12 @@ class JournalSummaryCreate(BaseModel):
     end_date: date
 
 class JournalSummaryOut(BaseModel):
-    id: UUID
+    id: int
     user_id: UUID
     start_date: date
     end_date: date
     summary_text: str
-    inserted_at: datetime
+    inserted_at: Optional[datetime] = None
 
     class Config:
          model_config = ConfigDict(from_attributes=True)
@@ -289,181 +278,7 @@ async def protected_route(user=Depends(get_current_user)):
     return {"message": "You have accessed a protected route!", "user": user}
 
 
-async def get_latest_therapist_insight_date(user_id: str) -> Optional[str]:
-    response = supabase.table("TherapistInsights") \
-        .select("created_at") \
-        .eq("user_id", user_id) \
-        .order("created_at", desc=True) \
-        .limit(1) \
-        .execute()
-
-    if response.data and len(response.data) > 0:
-        return response.data[0]['created_at']
-    return None
-
-
-async def get_goals_and_journals(user_id: str, last_insight_date: Optional[str] = None) -> dict:
-    query_goals = supabase.table("Goals").select("*").eq("user_id", user_id)
-    query_journals = supabase.table(
-        "Journals").select("*").eq("user_id", user_id)
-
-    # Only filter by date if last_insight_date is provided
-    if last_insight_date:
-        query_goals = query_goals.gte("created_at", last_insight_date)
-        query_journals = query_journals.gte("created_at", last_insight_date)
-
-    goals_response = query_goals.execute()
-    journals_response = query_journals.execute()
-
-    return {
-        "goals": goals_response.data,
-        "journals": journals_response.data
-    }
-
-
-async def generate_therapist_insights(data: dict) -> str:
-    try:
-        logger.info("Formatting data for OpenAI prompt")
-
-        # Format goals and journals for the prompt
-        formatted_goals = "\n".join(
-            [f"- {goal['type']}: {goal['content']}" for goal in data['goals']])
-        formatted_journals = "\n".join(
-            [f"- {journal['content']}" for journal in data['journals']])
-
-        logger.info("Creating prompt for OpenAI")
-        prompt = f"""As an AI therapist, analyze the following goals and journal entries:
-
-Goals:
-{formatted_goals}
-
-Journal Entries:
-{formatted_journals}
-
-Please provide therapeutic insights, patterns observed, and suggestions for personal growth. 
-Focus on emotional patterns, behavioral trends, and potential areas for development."""
-
-        logger.info("Sending request to OpenAI")
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are an empathetic AI therapist."},
-                {"role": "user", "content": prompt}
-            ],
-            
-            max_tokens=1000
-        )
-        logger.info("Received response from OpenAI")
-
-        return response.choices[0].message.content
-    except Exception as e:
-        logger.error(f"Error in generate_therapist_insights: {str(e)}")
-        raise Exception(f"Failed to generate insights: {str(e)}")
-
 # Routes
-
-
-@app.post("/api/goals-journals")
-async def save_goals_and_journal(data: GoalsJournalsRequest, user =Depends(get_current_user)):
-    try:
-        logger.info(f"Processing data: {data}")
-
-        # First save the journal entry since it's required
-        journal_response = supabase.table("Journals").insert({
-            "user_id": user.id, 
-            "content": data.journal
-        }).execute()
-
-        if not journal_response.data:
-            logger.error(f"Error saving journal: {journal_response}")
-            raise HTTPException(
-                status_code=500, 
-                detail=f"Error saving journal: Could not create journal entry"
-            )
-
-        # Then try to save goals if they're not empty/default values
-        goals_saved = []
-        for goal_type, content in data.goals.model_dump().items():
-            if content and content != "Not specified":  # Only save non-empty and non-default goals
-                goal_response = supabase.table("Goals").insert({
-                    "user_id": user.id,
-                    "type": goal_type,
-                    "content": content
-                }).execute()
-                
-                if goal_response.data:
-                    goals_saved.append(goal_type)
-                else:
-                    logger.warning(f"Error saving goal ({goal_type}): {goal_response}")
-
-        return {
-            "message": "Data saved successfully!",
-            "journal_saved": True,
-            "goals_saved": goals_saved
-        }
-
-    except Exception as e:
-        logger.exception("Error in save_goals_and_journal")
-        raise HTTPException(
-            status_code=500,
-            detail=str(e)
-        )
-
-
-@app.post("/api/generate-insights")
-async def generate_insights(user =Depends(get_current_user)):
-    user_id = user.id
-    try:
-        # Get the date of the last insight
-        last_insight_date = await get_latest_therapist_insight_date(user_id)
-
-        # Get data - if no last_insight_date, it will get all goals and journals
-        data = await get_goals_and_journals(user_id, last_insight_date)
-
-        # Check if there's any data to analyze
-        if not data['goals'] and not data['journals']:
-            return {"insights": "No new data available for analysis."}
-
-        # Generate insights using OpenAI
-        insights = await generate_therapist_insights(data)
-
-        # Save insights to Supabase
-        response = supabase.table("TherapistInsights").insert({
-            "user_id": user_id,
-            "content": insights,
-            "created_at": datetime.utcnow().isoformat()
-        }).execute()
-
-        if not response.data:
-            raise HTTPException(
-                status_code=500, detail="Failed to save insights")
-
-        return {"insights": insights}
-
-    except Exception as e:
-        logger.exception("Error generating insights")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/api/insights")
-async def get_insights(user =Depends(get_current_user)):
-    user_id = user.id
-    try:
-        response = supabase.table("TherapistInsights") \
-            .select("*") \
-            .eq("user_id", user_id) \
-            .order("created_at", desc=True) \
-            .limit(1) \
-            .execute()
-
-        if response.data and len(response.data) > 0:
-            return {"insights": response.data[0]['content']}
-        return {"insights": "No insights available yet."}
-
-    except Exception as e:
-        logger.exception("Error retrieving insights")
-        raise HTTPException(status_code=500, detail=str(e))
-
 @app.get("/api/chat-history")
 async def get_chat_history(user =Depends(get_current_user)):
     user_id = user.id
@@ -473,7 +288,7 @@ async def get_chat_history(user =Depends(get_current_user)):
         response = supabase.table("ChatHistory") \
             .select("*") \
             .eq("user_id", user_id) \
-            .order("created_at", asc=True) \
+            .order("created_at") \
             .execute()
         
         if not response.data:
@@ -514,7 +329,7 @@ async def chat(message: ChatMessage, user =Depends(get_current_user)):
         
         # Add context if provided
         if message.context:
-            messages.append({"role": "system", "content": f"Context from user's journal entries and goals: {message.context}"})
+            messages.append({"role": "system", "content": f"Context from user's journal entries and previous chats: {message.context}"})
         
         # Add chat history
         if chat_history.data and len(chat_history.data) > 0:
@@ -740,6 +555,7 @@ async def get_session_messages(session_id: str, user = Depends(get_current_user)
         logger.exception(f"Error retrieving messages for session {session_id}: {str(e)}")
         # Return empty array instead of error for better UX
         return {"messages": []}
+    
 @app.post("/api/chat-sessions/{session_id}/messages")
 async def send_message_to_session(session_id: str, message_data: SessionMessageCreate, user = Depends(get_current_user)):
     """
@@ -851,17 +667,17 @@ async def create_journal_summary(
 ):
     # 1) fetch raw journals
     journals = supabase.table("Journals") \
-        .select("content_text") \
+        .select("content") \
         .eq("user_id", user.id) \
         .gte("journal_date", payload.start_date.isoformat()) \
         .lte("journal_date", payload.end_date.isoformat()) \
-        .order("journal_date", asc=True) \
+        .order("journal_date") \
         .execute().data
 
     # 2) build prompt
-    entries = "\n".join(f"- {j['content_text']}" for j in journals)
+    entries = "\n".join(f"- {j['content']}" for j in journals)
     prompt = (
-        f"As an AI therapist, please summarize the user's journal entries "
+        f"As an AI therapist, please summarize the user's journal entries. Focus on the users highs, lows, and emotinal changes "
         f"from {payload.start_date} to {payload.end_date}:\n\n{entries}"
     )
 
@@ -876,21 +692,21 @@ async def create_journal_summary(
     ).choices[0].message.content
 
     # 4) persist summary
-    result = supabase.table("JournalSummaries") \
-        .insert([{
-            "user_id":       user.id,
-            "start_date":    payload.start_date.isoformat(),
-            "end_date":      payload.end_date.isoformat(),
-            "summary_text":  ai_resp
-        }]) \
-        .select("*") \
-        .single() \
-        .execute()
-
-    if result.error:
-        raise HTTPException(status_code=500, detail=result.error.message)
-
-    return result.data
+    try:
+        result = supabase.table("JournalSummaries") \
+            .insert([{
+                "user_id":       user.id,
+                "start_date":    payload.start_date.isoformat(),
+                "end_date":      payload.end_date.isoformat(),
+                "summary_text":  ai_resp
+            }]) \
+            .execute()
+        
+        # The insert returns a list of created records; return the first record to match JournalSummaryOut
+        return result.data[0]
+    except Exception as e:
+        # Catch any errors and return as HTTP 500
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/journal-summaries", response_model=JournalSummaryOut)
 async def get_journal_summary(
@@ -898,30 +714,35 @@ async def get_journal_summary(
     end_date: date,
     user=Depends(get_current_user)
 ):
-    result = supabase.table("JournalSummaries") \
+    # Query up to one matching summary
+    res = supabase.table("JournalSummaries") \
         .select("*") \
         .eq("user_id", user.id) \
         .eq("start_date", start_date.isoformat()) \
-        .eq("end_date",   end_date.isoformat()) \
-        .single() \
+        .eq("end_date", end_date.isoformat()) \
+        .limit(1) \
         .execute()
-
-    if result.error:
+    records = res.data or []
+    if len(records) == 0:
         raise HTTPException(status_code=404, detail="Summary not found")
-    return result.data
+    return records[0]
 
 @app.post("/api/chat-summaries", response_model=ChatSummaryOut)
 async def create_chat_summary(
     payload: ChatSummaryCreate,
     user=Depends(get_current_user)
 ):
-    # 1) pull all ChatMessages for that session
+    # turn the UUID into a plain string
+    session_id_str = str(payload.session_id)
+
+    # fetch messages
     msgs = supabase.table("ChatMessages") \
         .select("role,content") \
-        .eq("session_id", payload.session_id) \
-        .order("created_at", asc=True) \
+        .eq("session_id", session_id_str) \
+        .order("created_at") \
         .execute().data
 
+    # build your conversation text…
     convo = "\n".join(f"{m['role']}: {m['content']}" for m in msgs)
     prompt = f"Please summarize this conversation:\n\n{convo}"
 
@@ -929,24 +750,24 @@ async def create_chat_summary(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "You are a concise summarizer."},
-            {"role": "user", "content": prompt}
+            {"role": "user",   "content": prompt}
         ],
         max_tokens=300
     ).choices[0].message.content
 
-    result = supabase.table("ChatSummaries") \
-        .insert([{
-            "user_id":     user.id,
-            "session_id":  payload.session_id,
-            "summary_text": ai_resp
-        }]) \
-        .select("*") \
-        .single() \
-        .execute()
+    # now insert using the string ID
+    try:
+        res = supabase.table("ChatSummaries") \
+            .insert([{
+                "user_id":      str(user.id),       # also ensure it's a string
+                "session_id":   session_id_str,
+                "summary_text": ai_resp
+            }]) \
+            .execute()
+        return res.data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-    if result.error:
-        raise HTTPException(status_code=500, detail=result.error.message)
-    return result.data
 
 @app.get("/api/chat-summaries", response_model=List[ChatSummaryOut])
 async def list_chat_summaries(user=Depends(get_current_user)):
@@ -966,7 +787,7 @@ async def get_user_profile(user=Depends(get_current_user)):
         .eq("user_id", user.id) \
         .single() \
         .execute()
-    if res.error:
+    if res.data is None:
         raise HTTPException(status_code=404, detail="Profile not found")
     return res.data
 
@@ -984,6 +805,6 @@ async def upsert_user_profile(
         .single() \
         .execute()
 
-    if res.error:
-        raise HTTPException(status_code=500, detail=res.error.message)
+    if res.data is None:
+        raise HTTPException(status_code=500, detail="Failed to upsert user profile")
     return res.data
