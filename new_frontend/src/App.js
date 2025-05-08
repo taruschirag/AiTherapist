@@ -7,6 +7,7 @@ import HomeScreen from './screens/HomeScreen';
 import JournalPage from './screens/JournalPage';
 import ReflectionScreen from './screens/ReflectionScreen';
 import SummaryScreen from './screens/SummaryScreen';
+import Navbar from './components/Navbar';
 import './App.css';
 
 // Protected Route wrapper
@@ -55,6 +56,7 @@ function App() {
     <AuthProvider>
       <Router>
         <div className="App">
+          <Navbar />
           <Routes>
             <Route
               path="/login"
@@ -76,6 +78,7 @@ function App() {
               path="/"
               element={<Navigate to="/login" replace />}
             />
+            {/* Protected routes */}
             <Route
               path="/home"
               element={
