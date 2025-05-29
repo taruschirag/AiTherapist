@@ -81,6 +81,21 @@ export const getChatMessages = async (sessionId) => {
 
     return data;
 };
+
+export const loginWithGoogle = async () => {
+    try {
+        const { data, error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+        });
+
+        if (error) throw error;
+        return data;
+    } catch (error) {
+        console.error("Google Login Error:", error.message);
+        return null;
+    }
+};
+
 // In services/supabase.js (or wherever getUserChatSessions is defined)
 export const getUserChatSessions = async (userId) => {
     console.log('[getUserChatSessions] Attempting to fetch for userId:', userId); // Log input ID

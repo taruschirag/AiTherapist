@@ -147,6 +147,16 @@ export const apiService = {
         return response.data;
     },
 
+
+    saveJournal: async (content, journal_date) => {
+        const response = await api.post('/journals', {
+            content,
+            journal_date
+        });
+        return response.data;
+    },
+
+
     // Chat - updated to match your backend API
     sendChatMessage: async (message, context = null) => {
         const response = await api.post('/chat', { message, context });

@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import WelcomeMessageCard from '../components/WelcomeMessageCard';
+import { useAuth } from '../auth/AuthContext';
 
 import './HomeScreen.css';
 
 const HomeScreen = () => {
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [quote, setQuote] = useState({ text: "Loading quote...", author: "" });
     const [showWelcome, setShowWelcome] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [userName, setUserName] = useState('');
 
     useEffect(() => {
         const welcomeSeen = localStorage.getItem('hasSeenWelcomeMessage');
@@ -18,7 +21,13 @@ const HomeScreen = () => {
         setIsLoading(false);
 
         fetchQuote();
-    }, []);
+
+        // Extract name from email or use default greeting
+        if (user && user.email) {
+            const name = user.email.split('@')[0];
+            setUserName(name.charAt(0).toUpperCase() + name.slice(1));
+        }
+    }, [user]);
 
     const fetchQuote = () => {
         setQuote({
@@ -39,8 +48,6 @@ const HomeScreen = () => {
     if (showWelcome) {
         return <WelcomeMessageCard onComplete={handleWelcomeComplete} />;
     }
-
-
 
     const features = [
         {
@@ -67,7 +74,7 @@ const HomeScreen = () => {
         <div className="home-screen">
             <div className="home-container">
                 <div className="home-header">
-                    <h1>Welcome to AI Therapist</h1>
+                    <h1 className="welcome-heading">Welcome to Tranquil</h1>
                     <p>Your personal space for emotional well-being and self-reflection</p>
                 </div>
 

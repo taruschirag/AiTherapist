@@ -19,16 +19,19 @@
     margin-bottom: 40px;
 }
 
-.home-header h1 {
-    font-family: 'Brush Script MT', cursive;
-    font-size: 36px;
-    color: #4A6D51;
-    margin-bottom: 8px;
+.welcome-heading {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro', 'Helvetica Neue', Arial, sans-serif;
+    font-size: 32px;
+    font-weight: 600;
+    color: #3B6978;
+    margin-bottom: 12px;
+    letter-spacing: -0.5px;
 }
 
 .home-header p {
     color: #777;
     font-size: 16px;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro', 'Helvetica Neue', Arial, sans-serif;
 }
 
 .features-grid {
@@ -41,8 +44,8 @@
 .feature-card {
     background-color: #FFFFFF;
     padding: 24px;
-    border-radius: 20px;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.05);
+    border-radius: 16px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.05);
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     cursor: pointer;
 }
@@ -61,12 +64,15 @@
     color: #333;
     font-size: 20px;
     margin-bottom: 8px;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro', 'Helvetica Neue', Arial, sans-serif;
+    font-weight: 500;
 }
 
 .feature-card p {
     color: #666;
     font-size: 14px;
     line-height: 1.5;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro', 'Helvetica Neue', Arial, sans-serif;
 }
 
 .daily-quote {
@@ -74,21 +80,23 @@
     margin-top: 40px;
     padding: 24px;
     background-color: #FFFFFF;
-    border-radius: 20px;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.05);
+    border-radius: 16px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.05);
 }
 
 .daily-quote blockquote {
     font-size: 18px;
-    color: #4A6D51;
+    color: #3B6978;
     font-style: italic;
     margin: 0;
     margin-bottom: 8px;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro', 'Helvetica Neue', Arial, sans-serif;
 }
 
 .daily-quote cite {
     color: #777;
     font-size: 14px;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro', 'Helvetica Neue', Arial, sans-serif;
 }
 
 @media (max-width: 768px) {
@@ -96,7 +104,7 @@
         padding: 20px;
     }
 
-    .home-header h1 {
+    .welcome-heading {
         font-size: 28px;
     }
 

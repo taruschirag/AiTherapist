@@ -15,6 +15,9 @@ from pydantic import BaseModel, Field, ConfigDict
 from datetime import date
 from typing import List, Optional
 from datetime import datetime
+import json
+from datetime import datetime, timedelta, timezone
+today = datetime.utcnow().date()
 
 # Load environment variables from .env file
 load_dotenv()
@@ -51,7 +54,7 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -211,8 +214,8 @@ async def signup(user: UserSignup):
         try:
             # Try to save user email to database
             print(f"Attempting to save user to database with ID: {response.user.id}")
-            supabase.table("users").insert({
-                "id": response.user.id,  # Use the Supabase user ID as the primary key
+            supabase.table("Users").insert({
+                "user_id": response.user.id,  # Use the Supabase user ID as the primary key
                 "email": user.email,
                 "created_at": datetime.utcnow().isoformat()
             }).execute()
@@ -342,6 +345,8 @@ async def chat(message: ChatMessage, user =Depends(get_current_user)):
         messages.append({"role": "user", "content": message.message})
         
         logger.info(f"Sending {len(messages)} messages to OpenAI")
+        logger.info("🔎 OpenAI payload messages:\n%s", json.dumps(messages, indent=2))
+
         
         # Get response from OpenAI
         response = client.chat.completions.create(
@@ -381,6 +386,50 @@ async def chat(message: ChatMessage, user =Depends(get_current_user)):
     except Exception as e:
         logger.exception(f"Error in chat endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/journals")
+async def create_journal_entry(request: Request, user=Depends(get_current_user)):
+    body = await request.json()
+    journal_content = body.get("content")
+    journal_date = body.get("journal_date") or datetime.now(timezone.utc).date().isoformat()
+
+    if not journal_content:
+        raise HTTPException(status_code=400, detail="Journal content is required.")
+
+    try:
+        # 1. Upsert journal
+        supabase.table("Journals").upsert({
+        "user_id": user.id,
+        "journal_date": journal_date,
+        "content": journal_content
+    }, on_conflict="user_id, journal_date").execute()
+
+
+        # 2. Summarize using OpenAI
+        prompt = f"Summarize the following journal entry with emotional insight:\n\n{journal_content}"
+        ai_summary = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an empathetic AI therapist. Summarize the user's thoughts and feelings."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=300
+        ).choices[0].message.content
+
+        # 3. Save journal summary
+        supabase.table("JournalSummaries").upsert({
+            "user_id": user.id,
+            "start_date": journal_date,
+            "end_date": journal_date,
+            "summary_text": ai_summary
+        }, on_conflict="user_id, start_date, end_date").execute()
+
+        return {"message": "Journal and summary saved."}
+
+    except Exception as e:
+        logger.exception(f"Failed to save journal: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save journal.")
+
 
 @app.get("/api/journal-dates")
 async def get_journal_dates(user =Depends(get_current_user)):
@@ -474,9 +523,72 @@ async def create_chat_session_endpoint(user = Depends(get_current_user)):
         # Check if data was returned (successful insert)
         if response.data and len(response.data) > 0:
             new_session = response.data[0]
-            logger.info(f"Successfully created new chat session {new_session['session_id']} for user {user_id}")
-            # Return the session in the format expected by the frontend
-            return {"session": new_session}
+                # 2) Build "context" payload
+
+            # a) Journal summaries between 14 and 7 days ago
+            start = (today - timedelta(days=14)).isoformat()
+            end   = (today - timedelta(days=7)).isoformat()
+            journals_ctx = supabase.table("JournalSummaries") \
+                .select("start_date,end_date,summary_text") \
+                .eq("user_id", user_id) \
+                .gte("start_date", start) \
+                .lte("end_date",   end) \
+                .order("start_date", desc=True) \
+                .execute().data
+            
+            #Check if the profile exists
+            profile_res = supabase.table("UserProfiles") \
+                .select("profile_data") \
+                .eq("user_id", user_id) \
+                .execute()
+
+            if profile_res.data and len(profile_res.data) > 0:
+                profile_data = profile_res.data[0]["profile_data"]
+            else:
+                # Define the detailed initial profile structure
+                initial_default_profile = {
+                    "metadata": {
+                        "format": "JSONB",
+                        "source": "Initial Default Profile",
+                        "version": "1.0",
+                    },
+                    "name": "New User", # Placeholder name
+                    "ratings": [], # Start with an empty array
+                    "strengths": {},
+                    "weaknesses": {},
+                    "notes": "This is a default placeholder profile. User hasn't set anything yet."
+                }
+                supabase.table("UserProfiles").insert({
+                    "user_id": user_id,
+                    "profile_data": initial_default_profile, # Use the new detailed structure
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                    
+                }).execute()
+                profile_data = initial_default_profile
+
+
+
+            # b) Most recent chat summary (previous session)
+            chats_ctx = supabase.table("ChatSummaries") \
+                .select("summary_text") \
+                .eq("user_id", user_id) \
+                .order("inserted_at", desc=True) \
+                .gte("inserted_at", (today - timedelta(days=7)).isoformat()) \
+                .limit(1) \
+                .execute().data
+
+            # Safely access chat summary
+            last_chat_summary = chats_ctx[0]["summary_text"] if chats_ctx and chats_ctx[0] else None
+
+            context = {
+                "journal_summaries": journals_ctx,
+                "previous_chat_summary": last_chat_summary,
+                "user_profile": profile_data
+            }
+
+            update_user_profile(user.id)
+            return {"session": new_session, "context": context}
+        
         else:
             # This case might happen if the insert failed silently or due to RLS/policy issues
             # not caught as exceptions, or if the unique constraint was violated but didn't error out cleanly (less likely)
@@ -562,6 +674,55 @@ async def send_message_to_session(session_id: str, message_data: SessionMessageC
     Adds a user message to a specific chat session and gets an AI response.
     """
     user_id = user.id
+
+        # ─── FETCH CONTEXT ──────────────────────────────────────────────────────────
+    # 1) User profile
+    profile_res = supabase.table("UserProfiles") \
+        .select("profile_data") \
+        .eq("user_id", user_id) \
+        .execute()
+
+    if profile_res.data and len(profile_res.data) > 0:
+        profile = profile_res.data[0]["profile_data"]
+    else:
+        logger.info(f"[Auto-Init] No profile found for user {user_id}, inserting default.")
+        default_profile = {
+            "goals": {},
+            "personality": {},
+            "preferences": {},
+            "notes": "This is a default placeholder profile."
+        }
+        supabase.table("UserProfiles").insert({
+            "user_id": user_id,
+            "profile_data": default_profile, 
+            "updated_at": datetime.now(timezone.utc).isoformat()
+            
+            
+        }).execute()
+        profile = default_profile
+
+
+    # 2) Journal summaries (days 7–14)
+    today = datetime.utcnow().date()
+    journals_ctx = supabase.table("JournalSummaries") \
+        .select("start_date,end_date,summary_text") \
+        .eq("user_id", user_id) \
+        .gte("start_date", (today - timedelta(days=14)).isoformat()) \
+        .lte("end_date",   (today - timedelta(days=7)).isoformat()) \
+        .order("start_date", desc=True) \
+        .execute().data
+
+    # 3) Chat summary (last session)
+    chats_res = supabase.table("ChatSummaries") \
+        .select("summary_text") \
+        .eq("user_id", user_id) \
+        .order("inserted_at", desc=True) \
+        .limit(1) \
+        .execute()
+    last_chat_summary = chats_res.data[0]["summary_text"] if chats_res.data else None
+
+    # ─── END FETCH CONTEXT ──────────────────────────────────────────────────────────
+
     user_message_content = message_data.message
     try:
         logger.info(f"Received message for session {session_id} from user {user_id}: {user_message_content[:30]}...")
@@ -604,12 +765,16 @@ async def send_message_to_session(session_id: str, message_data: SessionMessageC
             .order("created_at", desc=True) \
             .limit(10) \
             .execute()
+        
 
         openai_messages = [
-             {"role": "system", "content": """You are an empathetic AI therapist named Therapost.
-             Focus on reflective listening, asking clarifying questions, and helping the user explore their feelings.
-             Keep responses supportive and concise (1-2 paragraphs). Avoid giving direct advice."""}
-        ]
+        {"role": "system", "content": """I want you to talk to me like a grounded, emotionally intelligent person. Don't sugarcoat things. Be honest but warm. If I'm being irrational or idealizing something, gently point it out. I don't want therapist-speak or shallow positivity. I want someone who can see through the noise, be real with me, and still understand that I'm trying my best to figure life out. You don't need to offer advice unless it feels necessary—sometimes I just want to be heard. Respond as if you genuinely care, but you're not here to flatter or coddle me."""},
+        {"role": "system", "content":
+            f"User profile: {profile}\n\n"
+            f"Journal summaries (7–14 days ago): {journals_ctx}\n"
+            f"Last chat summary: {last_chat_summary}"
+        }
+    ]
         if history_response.data:
              for msg in reversed(history_response.data):
                  openai_messages.append({"role": msg['role'], "content": msg['content']})
@@ -619,7 +784,7 @@ async def send_message_to_session(session_id: str, message_data: SessionMessageC
         # (Keep this section as is)
         logger.info(f"Sending {len(openai_messages)} messages to OpenAI for session {session_id}")
         ai_completion = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4-turbo",
             messages=openai_messages,
             max_tokens=300,
             temperature=0.7
@@ -685,7 +850,7 @@ async def create_journal_summary(
     ai_resp = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
-            {"role": "system", "content": "You are an empathetic summarizer."},
+            {"role": "system", "content": "You are an empathetic summarizer. Focus on emotional changes and insights. Use second person pronouns like 'you' and 'your' when addressing the user."},
             {"role": "user", "content": prompt}
         ],
         max_tokens=500
@@ -787,6 +952,10 @@ async def get_user_profile(user=Depends(get_current_user)):
         .eq("user_id", user.id) \
         .single() \
         .execute()
+    
+    if res.data.get("updated_at") is None:
+        res.data["updated_at"] = datetime.now(timezone.utc).isoformat()
+
     if res.data is None:
         raise HTTPException(status_code=404, detail="Profile not found")
     return res.data
@@ -805,6 +974,106 @@ async def upsert_user_profile(
         .single() \
         .execute()
 
-    if res.data is None:
-        raise HTTPException(status_code=500, detail="Failed to upsert user profile")
+    if res.error:
+        raise HTTPException(status_code=500, detail=res.error.message)
     return res.data
+
+
+def enforce_profile_schema(profile: dict) -> dict:
+    return {
+        "name": profile.get("name", "Unnamed User"),
+        "ratings": [
+            {
+                "category": r.get("category", "Unknown"),
+                "description": r.get("description", "")
+            }
+            for r in profile.get("ratings", [])
+        ],
+        "metadata": {
+            "format": profile.get("metadata", {}).get("format", "JSONB"),
+            "source": profile.get("metadata", {}).get("source", "AI Therapist"),
+            "version": profile.get("metadata", {}).get("version", "1.0"),
+            "created_at": profile.get("metadata", {}).get("created_at", datetime.now(timezone.utc).isoformat())
+        },
+        "strengths": profile.get("strengths", {}),
+        "weaknesses": profile.get("weaknesses", {})
+    }
+
+
+
+#helper functions for backend:
+def update_user_profile(user_id: str):
+
+    # 1. Get existing profile (if any)
+    old_profile_res = supabase.table("UserProfiles") \
+        .select("profile_data") \
+        .eq("user_id", user_id) \
+        .execute()
+    old_profile = old_profile_res.data[0]["profile_data"] if old_profile_res.data else {}
+
+    # 2. Get past 7 days of journals
+    today = datetime.now(timezone.utc).date()
+    past_journals = supabase.table("Journals") \
+        .select("content, journal_date") \
+        .eq("user_id", user_id) \
+        .gte("journal_date", (today - timedelta(days=7)).isoformat()) \
+        .order("journal_date") \
+        .execute().data
+
+    # 3. Get summaries of last 2 chat sessions
+    chat_summaries = supabase.table("ChatSummaries") \
+        .select("summary_text") \
+        .eq("user_id", user_id) \
+        .order("inserted_at", desc=True) \
+        .limit(2) \
+        .execute().data
+    summary_texts = "\n".join([c["summary_text"] for c in chat_summaries])
+
+    # 4. Prepare prompt for OpenAI
+    journal_texts = "\n".join([f"- {j['content']}" for j in past_journals])
+    prompt = (
+        "You are an AI profile summarizer for a therapist assistant application.\n"
+        "Based on the user's prior profile, recent journal entries, and last two chat summaries, "
+        "update the user's self-assessment, strengths, weaknesses, and metadata. KEEP it the same format as the prior profile!!\n\n"
+        f"Prior profile:\n{json.dumps(old_profile)}\n\n"
+        f"Recent journals:\n{journal_texts}\n\n"
+        f"Chat summaries:\n{summary_texts}"
+    )
+
+    # 5. Ask OpenAI to update the profile
+    ai_resp = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are an AI profile summarizer for a therapist assistant application.\n"
+                    "You are given a user's profile, recent journal entries, and last two chat summaries.\n"
+                    "You are to update the user's profile based on the new information.\n"
+                    "Output must be valid JSON with this exact top-level structure: {\n"
+                    "    'name': str,\n    'ratings': List[{'category': str, 'description': str}],\n"
+                    "    'metadata': {'format': str, 'source': str, 'version': str, 'created_at': str},\n    'strengths': Dict[str, str],\n    'weaknesses': Dict[str, str]\n}. Do NOT omit or rename any keys. Fill with empty lists/dicts if needed. This structure must not change.\n"
+                    "If a section hasn't changed, still include it.\n"
+                    "Focus on the user's goals, personality, preferences, and notes.\n"
+                    "Output only valid JSON."
+                )
+            },
+            {"role": "user", "content": prompt}
+        ],
+        max_tokens=1000
+    ).choices[0].message.content
+
+
+    # 6. Parse AI response as profile data (optional: validate JSON)
+    try:
+        new_profile = enforce_profile_schema(json.loads(ai_resp))
+    except json.JSONDecodeError:
+        logger.warning("AI response was not valid JSON. Skipping profile update.")
+        return
+
+    # 7. Upsert into UserProfiles
+    supabase.table("UserProfiles").upsert([{
+        "user_id": user_id,
+        "profile_data": new_profile,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }], on_conflict=["user_id"]).execute()

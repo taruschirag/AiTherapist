@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './AuthForm.css';  // Renamed CSS file accordingly
-import { loginUser, signUpUser } from '../../services/supabase';
+import { loginUser, signUpUser, loginWithGoogle } from '../../services/supabase';
 
 
 const AuthForm = ({ mode }) => {
@@ -27,7 +27,7 @@ const AuthForm = ({ mode }) => {
             : await signUpUser(email, password);
 
         if (data) {
-            navigate('/journal');
+            navigate('/home');
         } else {
             setError('Authentication failed. Check credentials or try again.');
         }
@@ -104,9 +104,18 @@ const AuthForm = ({ mode }) => {
                     </div>
 
                     <div className="social-login">
-                        <button className="social-button google">
+                        <button className="social-button google" onClick={async () => {
+                            const data = await loginWithGoogle();
+                            if (data) {
+                                // You will be redirected automatically if redirect URLs are set in Supabase
+                                console.log("Google login initiated:", data);
+                            } else {
+                                setError("Google login failed. Try again.");
+                            }
+                        }}>
                             Continue with Google
                         </button>
+
                         <button className="social-button apple">
                             Continue with Apple
                         </button>

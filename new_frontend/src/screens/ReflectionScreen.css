@@ -1,4 +1,24 @@
 /* ReflectionScreen.css */
+@font-face {
+    font-family: 'SF Pro';
+    src: local('SF Pro Display'),
+         local('SFProDisplay-Regular'),
+         local('SF Pro Text'),
+         local('SFProText-Regular');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'SF Pro';
+    src: local('SF Pro Display Bold'),
+         local('SFProDisplay-Bold'),
+         local('SF Pro Text Bold'),
+         local('SFProText-Bold');
+    font-weight: bold;
+    font-style: normal;
+}
+
 .reflection-screen {
     display: flex;
     flex-direction: column;
@@ -17,12 +37,13 @@
     position: relative;
 }
 
-.reflection-header h1 {
+/* Higher specificity selector to override App.css */
+.reflection-screen .reflection-header h1 {
     margin: 0;
     font-size: 28px;
     font-weight: bold;
     color: #4A4A4A;
-    font-family: 'Roboto', sans-serif;
+    font-family: 'SF Pro', 'SF Pro Display', 'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif !important;
 }
 
 .summary-toggle-button {
@@ -176,6 +197,32 @@
 
 .therapist-bubble .timestamp {
     text-align: left;
+}
+.typewriter-cursor {
+    animation: blink 1s infinite;
+    font-weight: bold;
+  }
+  
+  @keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+  }
+
+/* Blinking cursor for typewriter effect */
+.cursor-blink {
+    display: inline-block;
+    width: 2px;
+    height: 1em;
+    margin-left: 2px;
+    background-color: currentColor;
+    vertical-align: text-bottom;
+    animation: cursor-blink 0.8s infinite;
+    opacity: 0.7;
+}
+
+@keyframes cursor-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
 }
 
 .message-input-container {

@@ -268,7 +268,7 @@ const ReflectionScreen = () => {
     };
 
     const toggleSummary = async () => {
-        // If we’re about to open, and haven’t loaded yet:
+        // If we're about to open, and haven't loaded yet:
         if (!showSummary && !journalSummary) {
             try {
                 const today = new Date()
@@ -337,7 +337,7 @@ const ReflectionScreen = () => {
     return (
         <div className="reflection-screen">
             <div className="reflection-header">
-                <h1>Chirag's Reflection Corner</h1>
+                <h1>Your Reflection Corner</h1>
                 <button onClick={toggleSummary} className="summary-toggle-button">
                     {showSummary ? 'Hide Summary' : 'Show Summary'}
                 </button>
