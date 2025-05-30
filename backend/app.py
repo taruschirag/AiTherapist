@@ -139,23 +139,56 @@ class UserProfileOut(BaseModel):
 
 
 
+# This commented code works for local server but not for production:
+# async def get_current_user(authorization: Optional[str] = Header(None)):
+#     if not authorization:
+#         raise HTTPException(status_code=401, detail="Authorization header missing. Please log in.")
 
-async def get_current_user(authorization: Optional[str] = Header(None)):
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Authorization header missing. Please log in.")
+#     token = authorization.replace("Bearer ", "").strip()
 
-    token = authorization.replace("Bearer ", "").strip()
+#     # Validate the token with Supabase
+#     response = supabase.auth.get_user(token)
 
-    # Validate the token with Supabase
-    response = supabase.auth.get_user(token)
+#     if response.user is None:
+#         raise HTTPException(status_code=401, detail="Invalid or expired token. Please log in again.")
 
-    if response.user is None:
-        raise HTTPException(status_code=401, detail="Invalid or expired token. Please log in again.")
-
-    print("✅ User Object Type:", type(response.user))  # ✅ Debugging
+#     print("✅ User Object Type:", type(response.user))  # ✅ Debugging
     
 
-    return response.user  # ✅ Ensure this is an object, not a string
+#     return response.user  # ✅ Ensure this is an object, not a string
+
+async def get_current_user(authorization: Optional[str] = Header(None)):
+    try:
+        logger.info(f"Authorization header: {authorization}")
+        
+        if not authorization:
+            logger.error("No authorization header provided")
+            raise HTTPException(status_code=401, detail="Authorization header missing. Please log in.")
+
+        token = authorization.replace("Bearer ", "").strip()
+        logger.info(f"Extracted token: {token[:20]}...")  # Only log first 20 chars for security
+
+        # Check if Supabase client is initialized
+        if not supabase:
+            logger.error("Supabase client not initialized")
+            raise HTTPException(status_code=500, detail="Authentication service unavailable")
+
+        # Validate the token with Supabase
+        response = supabase.auth.get_user(token)
+        logger.info(f"Supabase response type: {type(response)}")
+
+        if response.user is None:
+            logger.error("Invalid token - no user returned from Supabase")
+            raise HTTPException(status_code=401, detail="Invalid or expired token. Please log in again.")
+
+        logger.info(f"✅ User authenticated: {response.user.id}")
+        return response.user
+
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions
+    except Exception as e:
+        logger.exception(f"Unexpected error in get_current_user: {str(e)}")
+        raise HTTPException(status_code=500, detail="Authentication error")
 
 
 @app.post("/api/refresh", response_model=RefreshResponse)
