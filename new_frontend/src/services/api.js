@@ -47,39 +47,73 @@ api.interceptors.request.use(
     }
 );
 
-api.interceptors.response.use(
-    response => response,
-    async error => {
-        const original = error.config;
-        const status = error.response?.status;
+// api.interceptors.response.use(
+//     response => response,
+//     async error => {
+//         const original = error.config;
+//         const status = error.response?.status;
 
-        // only handle auth errors once
-        if ((status === 401 || status === 403) && !original._retry) {
-            original._retry = true;
+//         // only handle auth errors once
+//         if ((status === 401 || status === 403) && !original._retry) {
+//             original._retry = true;
 
-            try {
-                const refreshToken = localStorage.getItem('refresh_token');
-                const { data } = await api.post('/refresh', { refresh_token: refreshToken });
-                localStorage.setItem('token', data.access_token);
-                localStorage.setItem('refresh_token', data.refresh_token);
+//             try {
+//                 const refreshToken = localStorage.getItem('refresh_token');
+//                 const { data } = await api.post('/refresh', { refresh_token: refreshToken });
+//                 localStorage.setItem('token', data.access_token);
+//                 localStorage.setItem('refresh_token', data.refresh_token);
 
-                // Update the header and retry
-                api.defaults.headers.Authorization = `Bearer ${data.access_token}`;
-                original.headers.Authorization = `Bearer ${data.access_token}`;
-                return api.request(original);
-            } catch (refreshError) {
-                // Refresh failed → fall through to logout
-                console.warn("Token refresh failed, redirecting to login.");
+//                 // Update the header and retry
+//                 api.defaults.headers.Authorization = `Bearer ${data.access_token}`;
+//                 original.headers.Authorization = `Bearer ${data.access_token}`;
+//                 return api.request(original);
+//             } catch (refreshError) {
+//                 // Refresh failed → fall through to logout
+//                 console.warn("Token refresh failed, redirecting to login.");
+//             }
+//         }
+
+//         // If we get here, either it wasn't a 401/403, or refresh failed
+//         localStorage.removeItem('token');
+//         localStorage.removeItem('refresh_token');
+//         window.location.href = "/login";
+//         return Promise.reject(error);
+//     }
+// );
+
+api.interceptors.request.use(
+    async (config) => {
+        let token = null;
+
+        // 1. Try known localStorage keys (Railway won't persist Supabase session automatically)
+        try {
+            for (const key of Object.keys(localStorage)) {
+                if (key.includes('auth-token')) {
+                    const session = JSON.parse(localStorage.getItem(key));
+                    token = session?.access_token;
+                    if (token) break;
+                }
             }
+        } catch (err) {
+            console.warn("Failed to parse auth token:", err);
         }
 
-        // If we get here, either it wasn't a 401/403, or refresh failed
-        localStorage.removeItem('token');
-        localStorage.removeItem('refresh_token');
-        window.location.href = "/login";
-        return Promise.reject(error);
-    }
+        // 2. Optional fallback to Supabase session (if using supabase-js auth methods)
+        if (!token && supabase?.auth) {
+            const { data: { session } = {} } = await supabase.auth.getSession();
+            token = session?.access_token;
+        }
+
+        // 3. Attach the token if found
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+
+        return config;
+    },
+    (error) => Promise.reject(error)
 );
+
 
 
 // API functions for your app
