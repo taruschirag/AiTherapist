@@ -3,7 +3,7 @@ import axios from 'axios';
 import { supabase } from './supabase';
 import { useState } from 'react';
 
-const API_URL = 'https://aitherapist-production.up.railway.app/';
+const API_URL = 'https://aitherapist-production.up.railway.app/api';
 
 // Create axios instance
 const api = axios.create({
