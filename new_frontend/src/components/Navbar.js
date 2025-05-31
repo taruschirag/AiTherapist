@@ -28,18 +28,19 @@ const Navbar = () => {
 
     return (
         <>
-            {/* Hamburger Icon */}
-            <div className="navbar-hamburger" onClick={() => setOpen(true)}>
-                <span className="bar"></span>
-                <span className="bar"></span>
-                <span className="bar"></span>
-            </div>
-            {/* Sidebar Overlay */}
+            {!open && (
+                <div className="navbar-hamburger" onClick={() => setOpen(true)}>
+                    <span className="bar"></span>
+                    <span className="bar"></span>
+                    <span className="bar"></span>
+                </div>
+            )}
+
             {open && (
                 <div className="navbar-overlay" onClick={handleOverlayClick}>
                     <nav className="navbar-sidebar">
                         <div className="navbar-sidebar-header">
-                            <span className="navbar-title" onClick={() => handleNavClick('/home')}>AI Therapist</span>
+                            <span className="navbar-title" onClick={() => handleNavClick('/home')}>tranquil</span>
                             <button className="navbar-close" onClick={() => setOpen(false)}>&times;</button>
                         </div>
                         <ul className="navbar-links-vertical">

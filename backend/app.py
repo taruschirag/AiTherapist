@@ -581,16 +581,16 @@ async def create_chat_session_endpoint(user = Depends(get_current_user)):
             else:
                 # Define the detailed initial profile structure
                 initial_default_profile = {
+                    "name": "New User",
+                    "ratings": [],
                     "metadata": {
                         "format": "JSONB",
                         "source": "Initial Default Profile",
                         "version": "1.0",
+                        "created_at": datetime.now(timezone.utc).isoformat()
                     },
-                    "name": "New User", # Placeholder name
-                    "ratings": [], # Start with an empty array
                     "strengths": {},
-                    "weaknesses": {},
-                    "notes": "This is a default placeholder profile. User hasn't set anything yet."
+                    "weaknesses": {}
                 }
                 supabase.table("UserProfiles").insert({
                     "user_id": user_id,
@@ -721,11 +721,18 @@ async def send_message_to_session(session_id: str, message_data: SessionMessageC
     else:
         logger.info(f"[Auto-Init] No profile found for user {user_id}, inserting default.")
         default_profile = {
-            "goals": {},
-            "personality": {},
-            "preferences": {},
-            "notes": "This is a default placeholder profile."
+            "name": "New User",
+            "ratings": [],
+            "metadata": {
+                "format": "JSONB",
+                "source": "Initial Default Profile",
+                "version": "1.0",
+                "created_at": datetime.now(timezone.utc).isoformat()
+            },
+            "strengths": {},
+            "weaknesses": {},
         }
+
         supabase.table("UserProfiles").insert({
             "user_id": user_id,
             "profile_data": default_profile, 
@@ -987,11 +994,15 @@ async def get_user_profile(user=Depends(get_current_user)):
         .single() \
         .execute()
     
+    if res.data is None:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    
+    res.data["profile_data"] = enforce_profile_schema(res.data["profile_data"])
+    
     if res.data.get("updated_at") is None:
         res.data["updated_at"] = datetime.now(timezone.utc).isoformat()
 
-    if res.data is None:
-        raise HTTPException(status_code=404, detail="Profile not found")
+
     return res.data
 
 @app.put("/api/user-profile", response_model=UserProfileOut)
@@ -1013,25 +1024,28 @@ async def upsert_user_profile(
     return res.data
 
 
-def enforce_profile_schema(profile: dict) -> dict:
+def enforce_profile_schema(data: dict) -> dict:
+    if not isinstance(data, dict):
+        data = {}
+
+    def ensure_dict(d):
+        return d if isinstance(d, dict) else {}
+
+    def ensure_list_of_dicts(l):
+        return l if isinstance(l, list) and all(isinstance(i, dict) for i in l) else []
+
     return {
-        "name": profile.get("name", "Unnamed User"),
-        "ratings": [
-            {
-                "category": r.get("category", "Unknown"),
-                "description": r.get("description", "")
-            }
-            for r in profile.get("ratings", [])
-        ],
-        "metadata": {
-            "format": profile.get("metadata", {}).get("format", "JSONB"),
-            "source": profile.get("metadata", {}).get("source", "AI Therapist"),
-            "version": profile.get("metadata", {}).get("version", "1.0"),
-            "created_at": profile.get("metadata", {}).get("created_at", datetime.now(timezone.utc).isoformat())
-        },
-        "strengths": profile.get("strengths", {}),
-        "weaknesses": profile.get("weaknesses", {})
+        "name": data.get("name", "Unnamed"),
+        "ratings": ensure_list_of_dicts(data.get("ratings", [])),
+        "metadata": ensure_dict(data.get("metadata", {})),
+        "strengths": ensure_dict(data.get("strengths", {})),
+        "weaknesses": ensure_dict(data.get("weaknesses", {})),
+        "goals": ensure_dict(data.get("goals", {})),
+        "personality": ensure_dict(data.get("personality", {})),
+        "preferences": ensure_dict(data.get("preferences", {})),
+        "notes": data.get("notes", "This is a default placeholder profile.")
     }
+
 
 
 

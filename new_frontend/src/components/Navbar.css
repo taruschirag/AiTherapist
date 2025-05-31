@@ -65,17 +65,18 @@
   position: fixed;
   top: 1.2rem;
   left: 1.2rem;
-  z-index: 1101;
+  z-index: 1200; /* <-- Make sure it's above overlay (1100) */
   display: flex;
   flex-direction: column;
   justify-content: center;
   width: 36px;
   height: 36px;
   cursor: pointer;
-  background: rgba(177,190,166,0.10);
+  background: rgba(177, 190, 166, 0.10);
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
+
 
 .bar {
   height: 4px;
