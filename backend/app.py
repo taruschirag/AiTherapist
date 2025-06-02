@@ -54,7 +54,11 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000","https://aitherapist-production.up.railway.app"],
+    allow_origins=[
+        "http://localhost:3000",
+        "https://aitherapist-production.up.railway.app",
+        "https://ai-therapist-seven.vercel.app"
+    ],
     #llow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
@@ -354,7 +358,7 @@ async def chat(message: ChatMessage, user =Depends(get_current_user)):
         
         # Format chat history for OpenAI
         messages = [
-            {"role": "system", "content": """You are an empathetic AI therapist named Therapost. 
+            {"role": "system", "content": """You are an empathetic therapist named Therapist. 
             You help users process their thoughts and emotions through thoughtful conversation.
             Use the provided context about the user's journal entries and previous chat
             to give thoughtful, therapeutic responses. Focus on being supportive while
