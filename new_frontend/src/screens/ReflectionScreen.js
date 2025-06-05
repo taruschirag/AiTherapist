@@ -3,6 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import apiService from '../services/api';
 import './ReflectionScreen.css';
+import { MessageCircleHeart, BrainCircuit, LineChart, Feather } from 'lucide-react';
+import DOMPurify from 'dompurify';
+import { marked } from 'marked';
+
 
 // --- Helper function to format date (more robust) ---
 const formatDate = (dateInput) => {
@@ -388,20 +392,25 @@ const ReflectionScreen = () => {
                                 <p>Select a session from the history.</p>
                             </div>
                         ) : (
+
+
                             conversation.map(message => (
                                 <div
-                                    // Use actual DB id if available, otherwise temp id
                                     key={message.id}
                                     className={`chat-bubble ${message.isUser ? 'user-bubble' : 'therapist-bubble'}`}
                                 >
-                                    <p>{message.text}</p>
+
+                                    <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(message.text)) }} />
+
                                     {message.timestamp && (
                                         <small className="timestamp">
                                             {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                         </small>
                                     )}
                                 </div>
+
                             ))
+
                         )}
 
                         {isSending && (

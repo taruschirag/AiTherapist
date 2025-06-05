@@ -1,6 +1,6 @@
 .summary-container {
     min-height: 100vh;
-    background-color: #E5DED3;
+    background-color: #F5F3EB;
     display: flex;
     flex-direction: column;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -9,7 +9,7 @@
 .header {
     padding: 24px 32px;
     text-align: center;
-    background-color: #B1BEA6;
+    background-color: #F5F3EB;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     border-bottom-left-radius: 12px;
     border-bottom-right-radius: 12px;
@@ -18,13 +18,13 @@
 .header h1 {
     font-size: 28px;
     font-weight: 700;
-    color: #333;
+    color: #333333;
     margin: 0 0 8px 0;
 }
 
 .profile-date {
     font-size: 14px;
-    color: #555;
+    color: #555555;
     margin: 0;
 }
 
@@ -49,17 +49,17 @@
 .profile-section-title {
     font-size: 20px;
     font-weight: 600;
-    color: #333;
+    color: #333333;
     margin: 0 0 24px 0;
     text-align: center;
-    border-bottom: 2px solid #E5DED3;
+    border-bottom: 2px solid #E0E0E0;
     padding-bottom: 12px;
 }
 
 .assessment-item {
     margin-bottom: 24px;
     padding-bottom: 20px;
-    border-bottom: 1px solid #E5DED3;
+    border-bottom: 1px solid #E0E0E0;
 }
 
 .assessment-item:last-child {
@@ -78,14 +78,14 @@
 .assessment-category, .strength-title, .weakness-title {
     font-size: 18px;
     font-weight: 600;
-    color: #333;
+    color: #333333;
     margin: 0;
 }
 
 .strength-item, .weakness-item {
     margin-bottom: 20px;
     padding-bottom: 16px;
-    border-bottom: 1px solid #E5DED3;
+    border-bottom: 1px solid #E0E0E0;
 }
 
 .strength-item:last-child, .weakness-item:last-child {
@@ -97,7 +97,7 @@
 .strength-description, .weakness-description {
     font-size: 15px;
     line-height: 1.5;
-    color: #555;
+    color: #555555;
     margin: 8px 0 0 0;
 }
 
@@ -110,14 +110,14 @@
 .score-bar-background {
     height: 10px;
     width: 120px;
-    background-color: #E5DED3;
+    background-color: #E0E0E0;
     border-radius: 5px;
     overflow: hidden;
 }
 
 .score-bar-fill {
     height: 100%;
-    background-color: #B1BEA6;
+    background-color: #81C784;
     border-radius: 5px;
     transition: width 0.5s ease;
 }
@@ -125,20 +125,20 @@
 .score-text {
     font-size: 14px;
     font-weight: 600;
-    color: #555;
+    color: #555555;
     min-width: 36px;
 }
 
 .assessment-description {
     font-size: 15px;
     line-height: 1.5;
-    color: #555;
+    color: #555555;
     margin: 0;
 }
 
 .journal-button {
-    background-color: #B1BEA6;
-    color: #333;
+    background-color: #E0B96A;
+    color: white;
     font-weight: 600;
     padding: 14px 28px;
     border: none;
@@ -151,7 +151,7 @@
 }
 
 .journal-button:hover {
-    background-color: #9DAA92;
+    background-color: #5B8E7D;
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }

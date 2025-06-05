@@ -1,16 +1,16 @@
 // src/styles/theme.js
 export const colors = {
-    primary: '#8BC34A',  // Green for positive vibes
-    secondary: '#4682B4', // Steel Blue for calming effect
-    accent: '#FFD700',   // Gold for positive highlights
-    background: '#F5F5DC', // Beige background from your designs
-    chatBubbleUser: '#D3D3A4',  // Light olive green for user bubbles
-    chatBubbleAssistant: '#A8D1A5', // Light green for assistant bubbles
-    text: '#333333',
-    lightText: '#666666',
+    primary: '#5B8E7D',  // Soft Teal
+    secondary: '#7FC4A3', // Lighter Teal
+    accent: '#E0B96A',   // Warm Gold for highlights and CTAs
+    background: '#F5F3EB', // Creamy background
+    chatBubbleUser: '#E0E0E0',  // Light grey for user bubbles (neutral)
+    chatBubbleAssistant: '#B2DFDB', // Light teal for assistant bubbles
+    text: '#333333', // Dark grey for good contrast
+    lightText: '#555555', // Slightly lighter grey
     white: '#FFFFFF',
-    error: '#FF6B6B',
-    success: '#4CAF50',
+    error: '#E57373', // Soft red
+    success: '#81C784', // Soft green
 };
 
 export const fonts = {

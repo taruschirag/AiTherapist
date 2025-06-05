@@ -130,8 +130,17 @@ function JournalPage() {
     setCurrentEntryContent(e.target.innerHTML);
     if (!hasChangedRef.current) {
       hasChangedRef.current = true;
-      console.log("Content changed, marked for save.");
     }
+  };
+
+  const formatDateForDisplay = (dateString) => {
+    const date = new Date(dateString + 'T12:00:00Z');
+    return date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
   };
 
   const renderCalendar = () => {
@@ -140,10 +149,21 @@ function JournalPage() {
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const firstDay = new Date(year, month, 1).getDay();
 
+    const monthNames = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+    ];
+
+    const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
     const days = [];
+
+    // Empty cells for days before the first day of the month
     for (let i = 0; i < firstDay; i++) {
       days.push(<div key={`empty-${i}`} className="calendar-day empty"></div>);
     }
+
+    // Days of the month
     for (let day = 1; day <= daysInMonth; day++) {
       const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const hasEntry = calendarData.journalDates[dateString];
@@ -160,6 +180,15 @@ function JournalPage() {
           key={day}
           className={dayClass}
           onClick={() => handleDateClick(dateString)}
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              handleDateClick(dateString);
+            }
+          }}
+          role="button"
+          aria-label={`${monthNames[month]} ${day}, ${year}${hasEntry ? ' - has entry' : ''}${isToday ? ' - today' : ''}`}
         >
           {day}
         </div>
@@ -169,18 +198,30 @@ function JournalPage() {
     return (
       <div className="calendar-container">
         <div className="calendar-header">
-          <button onClick={() => {
-            performSave();
-            setCalendarData(cd => ({ ...cd, currentMonth: new Date(year, month - 1) }));
-          }}>&lt;</button>
-          <span>{new Date(year, month).toLocaleString('default', { month: 'long', year: 'numeric' })}</span>
-          <button onClick={() => {
-            performSave();
-            setCalendarData(cd => ({ ...cd, currentMonth: new Date(year, month + 1) }));
-          }}>&gt;</button>
+          <button
+            onClick={() => {
+              performSave();
+              setCalendarData(cd => ({ ...cd, currentMonth: new Date(year, month - 1) }));
+            }}
+            aria-label="Previous month"
+          >
+            ‹
+          </button>
+          <span>{monthNames[month]} {year}</span>
+          <button
+            onClick={() => {
+              performSave();
+              setCalendarData(cd => ({ ...cd, currentMonth: new Date(year, month + 1) }));
+            }}
+            aria-label="Next month"
+          >
+            ›
+          </button>
         </div>
+
+        {/* Weekday headers */}
         <div className="calendar-days">
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(day => (
+          {weekdays.map(day => (
             <div key={day} className="calendar-weekday">{day}</div>
           ))}
           {days}
@@ -189,21 +230,38 @@ function JournalPage() {
     );
   };
 
+  const getPlaceholderText = () => {
+    if (!selectedDate) return "Select a date to start writing...";
+    return `Begin your journal entry for ${formatDateForDisplay(selectedDate)}...`;
+  };
+
   return (
     <div className="journal-page-container modern">
       <div className="journal-canvas-section">
-        {loading && <div className="loading-overlay">Loading Entry...</div>}
-        {isSaving && <div className="saving-indicator">Saving...</div>}
+        {loading && (
+          <div className="loading-overlay">
+            📝 Loading Entry...
+          </div>
+        )}
+        {isSaving && (
+          <div className="saving-indicator">
+            ✨ Saving...
+          </div>
+        )}
         <div
           ref={editorRef}
           className="journal-canvas"
           contentEditable={!loading && !!selectedDate}
           onInput={handleEditorInput}
           onBlur={performSave}
-          data-placeholder={selectedDate ? `Start writing for ${new Date(selectedDate + 'T12:00:00Z').toLocaleDateString()}...` : "Select a date to start writing..."}
+          data-placeholder={getPlaceholderText()}
           suppressContentEditableWarning={true}
+          role="textbox"
+          aria-label="Journal entry editor"
+          aria-multiline="true"
         />
       </div>
+
       <div className="calendar-sidebar-section">
         {renderCalendar()}
       </div>

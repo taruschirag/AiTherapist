@@ -1,107 +1,244 @@
+/* BACKGROUND & LAYOUT */
 .home-screen {
     display: flex;
     min-height: 100vh;
-    background-color: #F5F5F5;
+    background: linear-gradient(135deg, #F6FCFA 0%, #EBF4F2 100%);
 }
 
 .home-container {
     flex: 1;
     display: flex;
     flex-direction: column;
-    padding: 40px;
+    padding: 60px 40px;
     max-width: 1200px;
     margin: 0 auto;
     width: 100%;
 }
 
+/* HEADER */
 .home-header {
     text-align: center;
-    margin-bottom: 40px;
+    margin-bottom: 60px;
 }
 
 .welcome-heading {
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro', 'Helvetica Neue', Arial, sans-serif;
-    font-size: 32px;
-    font-weight: 600;
-    color: #3B6978;
-    margin-bottom: 12px;
-    letter-spacing: -0.5px;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-size: 42px;
+    font-weight: 700;
+    color: #2C3E50;
+    margin-bottom: 16px;
+    letter-spacing: -0.8px;
+    background: linear-gradient(135deg, #2C3E50 0%, #2B7A78 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 .home-header p {
-    color: #777;
-    font-size: 16px;
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro', 'Helvetica Neue', Arial, sans-serif;
+    color: #5A6D70;
+    font-size: 18px;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-weight: 400;
+    line-height: 1.6;
+    max-width: 600px;
+    margin: 0 auto;
 }
 
+/* FEATURE CARDS */
 .features-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 24px;
-    margin-bottom: 40px;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 32px;
+    margin-bottom: 60px;
 }
 
 .feature-card {
-    background-color: #FFFFFF;
-    padding: 24px;
-    border-radius: 16px;
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.05);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    padding: 32px;
+    border-radius: 20px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08),
+                0 20px 48px rgba(0, 0, 0, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    transition: all 0.3s ease;
     cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.feature-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #FF7F7F, #A8D5BA, #B8A9C9);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.feature-card:hover::before {
+    opacity: 1;
+}
+
+/* Hover Accent Lines by Index */
+.feature-card:nth-child(1):hover::before {
+    background: linear-gradient(90deg, #FF7F7F, #FFADAD); /* Coral */
+}
+
+.feature-card:nth-child(2):hover::before {
+    background: linear-gradient(90deg, #A8D5BA, #D2E8D8); /* Sage */
+}
+
+.feature-card:nth-child(3):hover::before {
+    background: linear-gradient(90deg, #D6CDEA, #EDE7F6); /* Lavender */
 }
 
 .feature-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12),
+                0 15px 25px rgba(0, 0, 0, 0.08);
 }
 
+/* CARD CONTENT */
 .feature-icon {
-    font-size: 32px;
-    margin-bottom: 16px;
+    font-size: 40px;
+    margin-bottom: 20px;
+    display: block;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
 }
 
-.feature-card h3 {
-    color: #333;
+.feature-title {
+    color: #1F2D3D;
+    font-size: 22px;
+    margin-bottom: 12px;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.feature-description {
+    color: #4B5563;
+    font-size: 16px;
+    line-height: 1.6;
+    font-weight: 400;
+}
+
+.feature-arrow {
+    color: #2B7A78;
+    font-weight: bold;
     font-size: 20px;
-    margin-bottom: 8px;
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro', 'Helvetica Neue', Arial, sans-serif;
-    font-weight: 500;
+    margin-top: 12px;
 }
 
-.feature-card p {
-    color: #666;
-    font-size: 14px;
-    line-height: 1.5;
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro', 'Helvetica Neue', Arial, sans-serif;
-}
-
+/* QUOTE SECTION */
 .daily-quote {
     text-align: center;
-    margin-top: 40px;
-    padding: 24px;
-    background-color: #FFFFFF;
-    border-radius: 16px;
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.05);
+    margin-top: 20px;
+    padding: 40px 32px;
+    background: linear-gradient(135deg, #FFF8F1 0%, #FFF3E0 100%);
+    border: 1px solid #FFDAB9;
+    backdrop-filter: blur(20px);
+    border-radius: 24px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08),
+                0 20px 48px rgba(0, 0, 0, 0.04);
+    position: relative;
+    overflow: hidden;
 }
 
 .daily-quote blockquote {
-    font-size: 18px;
-    color: #3B6978;
+    font-size: 20px;
+    color: #8E6E53;
     font-style: italic;
-    margin: 0;
-    margin-bottom: 8px;
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro', 'Helvetica Neue', Arial, sans-serif;
+    margin-bottom: 16px;
+    font-weight: 500;
+    line-height: 1.5;
+    position: relative;
+}
+
+.daily-quote blockquote::before {
+    content: '"';
+    font-size: 60px;
+    color: rgba(142, 110, 83, 0.2);
+    position: absolute;
+    top: -20px;
+    left: -30px;
+    font-family: Georgia, serif;
 }
 
 .daily-quote cite {
-    color: #777;
+    color: #8D8D8D;
     font-size: 14px;
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro', 'Helvetica Neue', Arial, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
+/* FOOTER */
+.home-footer .footer-text {
+    text-align: center;
+    font-size: 14px;
+    color: #66777B;
+    margin-top: 60px;
+}
+
+/* MOBILE RESPONSIVENESS */
 @media (max-width: 768px) {
     .home-container {
-        padding: 20px;
+        padding: 40px 24px;
+    }
+
+    .welcome-heading {
+        font-size: 32px;
+        letter-spacing: -0.5px;
+    }
+
+    .home-header p {
+        font-size: 16px;
+    }
+
+    .features-grid {
+        grid-template-columns: 1fr;
+        gap: 24px;
+        margin-bottom: 40px;
+    }
+
+    .feature-card {
+        padding: 24px;
+        border-radius: 16px;
+    }
+
+    .feature-icon {
+        font-size: 36px;
+        margin-bottom: 16px;
+    }
+
+    .feature-title {
+        font-size: 20px;
+    }
+
+    .feature-description {
+        font-size: 15px;
+    }
+
+    .daily-quote {
+        padding: 32px 24px;
+        border-radius: 20px;
+    }
+
+    .daily-quote blockquote {
+        font-size: 18px;
+    }
+
+    .daily-quote blockquote::before {
+        font-size: 48px;
+        top: -15px;
+        left: -20px;
+    }
+}
+
+@media (max-width: 480px) {
+    .home-container {
+        padding: 32px 20px;
     }
 
     .welcome-heading {
@@ -109,10 +246,14 @@
     }
 
     .features-grid {
-        grid-template-columns: 1fr;
+        gap: 20px;
     }
 
     .feature-card {
         padding: 20px;
     }
-} 
+
+    .daily-quote {
+        padding: 24px 20px;
+    }
+}

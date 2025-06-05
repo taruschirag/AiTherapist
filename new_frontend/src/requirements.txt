@@ -1,3 +1,5 @@
 framer-motion
 openai
+lucide-react
+
 
