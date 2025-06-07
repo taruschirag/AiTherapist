@@ -2,10 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import WelcomeMessageCard from '../components/WelcomeMessageCard';
 import { useAuth } from '../auth/AuthContext';
-import { Feather, BrainCircuit, LineChart, MessageCircleHeart } from 'lucide-react';
-
-
+import { Feather, LineChart, MessageCircleHeart } from 'lucide-react';
 import './HomeScreen.css';
+import { supabase } from '../services/supabase';
 
 const HomeScreen = () => {
     const navigate = useNavigate();
@@ -16,23 +15,35 @@ const HomeScreen = () => {
     const [userName, setUserName] = useState('');
 
     useEffect(() => {
-        const welcomeSeen = localStorage.getItem('hasSeenWelcomeMessage');
-        if (!welcomeSeen) {
-            setShowWelcome(true);
-        }
-        setIsLoading(false);
+        const checkNewUserStatus = async () => {
+            if (!user) return;
 
-        fetchQuote();
+            const { data, error } = await supabase
+                .from('Users')
+                .select('is_new_user')
+                .eq('user_id', user.id)
+                .single();
 
-        // Extract name from email or use default greeting
-        if (user && user.email) {
-            const name = user.email.split('@')[0];
-            setUserName(name.charAt(0).toUpperCase() + name.slice(1));
-        }
+            if (error) {
+                console.error('Error fetching is_new_user:', error.message);
+                setShowWelcome(false); // fail-safe
+            } else {
+                setShowWelcome(data?.is_new_user === true);
+            }
+
+            setIsLoading(false);
+            fetchQuote();
+
+            if (user?.email) {
+                const name = user.email.split('@')[0];
+                setUserName(name.charAt(0).toUpperCase() + name.slice(1));
+            }
+        };
+
+        checkNewUserStatus();
     }, [user]);
 
     const fetchQuote = () => {
-        // Array of meaningful quotes for mental health and self-reflection
         const quotes = [
             { text: "The journey of a thousand miles begins with a single step.", author: "Lao Tzu" },
             { text: "What we think, we become. All that we are arises with our thoughts.", author: "Buddha" },
@@ -42,15 +53,27 @@ const HomeScreen = () => {
             { text: "In the middle of difficulty lies opportunity.", author: "Albert Einstein" },
             { text: "The present moment is the only time over which we have dominion.", author: "Thích Nhất Hạnh" }
         ];
-
-        const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
-        setQuote(randomQuote);
+        setQuote(quotes[Math.floor(Math.random() * quotes.length)]);
     };
 
-    const handleWelcomeComplete = () => {
+    const handleWelcomeComplete = async () => {
         localStorage.setItem('hasSeenWelcomeMessage', 'true');
         setShowWelcome(false);
+
+        if (user) {
+            const { error } = await supabase
+                .from('Users')  // or from('"Users"') if capitalized
+                .update({ is_new_user: false })
+                .eq('user_id', user.id);
+
+            if (error) {
+                console.error('Failed to update user onboarding status:', error);
+            }
+        }
     };
+
+
+
 
     if (isLoading) {
         return (
@@ -89,7 +112,6 @@ const HomeScreen = () => {
         }
     ];
 
-
     const getGreeting = () => {
         const hour = new Date().getHours();
         if (hour < 12) return 'Good morning';
@@ -98,21 +120,14 @@ const HomeScreen = () => {
     };
 
     const getPersonalizedHeader = () => {
-        if (userName) {
-            return `${getGreeting()}, ${userName}`;
-        }
-        return 'Welcome to Tranquil';
+        return userName ? `${getGreeting()}, ${userName}` : 'Welcome to Tranquil';
     };
 
     const getPersonalizedSubtext = () => {
         const hour = new Date().getHours();
-        if (hour < 12) {
-            return 'Start your day with mindful reflection and self-care';
-        } else if (hour < 17) {
-            return 'Take a moment to check in with yourself and your emotions';
-        } else {
-            return 'Wind down and reflect on your day in this peaceful space';
-        }
+        if (hour < 12) return 'Start your day with mindful reflection and self-care';
+        if (hour < 17) return 'Take a moment to check in with yourself and your emotions';
+        return 'Wind down and reflect on your day in this peaceful space';
     };
 
     return (

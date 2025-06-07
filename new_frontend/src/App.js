@@ -8,7 +8,11 @@ import JournalPage from './screens/JournalPage';
 import ReflectionScreen from './screens/ReflectionScreen';
 import SummaryScreen from './screens/SummaryScreen';
 import Navbar from './components/Navbar';
+import { handleOnboardingComplete } from './services/handleOnboardingComplete';
 import './App.css';
+import { supabase } from './services/supabase'; // adjust path if different
+import WelcomeMessageCard from './components/WelcomeMessageCard';
+
 
 // Protected Route wrapper
 const ProtectedRoute = ({ children }) => {
@@ -32,6 +36,50 @@ const ProtectedRoute = ({ children }) => {
   return children;
 };
 
+
+const InitialRedirect = () => {
+  const { user, loading } = useAuth();
+  const [target, setTarget] = React.useState(null);
+
+
+  React.useEffect(() => {
+    const checkNewUser = async () => {
+      if (!user) {
+        setTarget('/login');
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('users')
+        .select('is_new_user')
+        .eq('id', user.id)
+        .single();
+
+      if (error) {
+        console.error('Error checking user status:', error);
+        setTarget('/home'); // Fallback
+      } else {
+        // Choose one and remove the other
+        setTarget(data.is_new_user ? '/onboarding' : '/home');
+      }
+
+    };
+
+    checkNewUser();
+  }, [user]);
+
+  if (loading || !target) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        Loading...
+      </div>
+    );
+  }
+
+  return <Navigate to={target} replace />;
+};
+
+
 // Public Route wrapper (redirects to home if already authenticated)
 const PublicRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -51,7 +99,15 @@ const PublicRoute = ({ children }) => {
   return children;
 };
 
+const OnboardingWrapper = () => {
+  const { user } = useAuth();
+  return (
+    <WelcomeMessageCard onComplete={() => handleOnboardingComplete(user)} />
+  );
+};
+
 function App() {
+
   return (
     <AuthProvider>
       <Router>
@@ -74,12 +130,19 @@ function App() {
                 </PublicRoute>
               }
             />
-            <Route
-              path="/"
-              element={<Navigate to="/login" replace />}
-            />
+
             {/* Protected routes */}
             <Route
+              path="/onboarding"
+              element={
+                <ProtectedRoute>
+                  <OnboardingWrapper />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+
               path="/home"
               element={
                 <ProtectedRoute>
@@ -111,7 +174,8 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            <Route path="*" element={<Navigate to="/login" replace />} />
+            <Route path="/" element={<InitialRedirect />} />
+
           </Routes>
         </div>
       </Router>
