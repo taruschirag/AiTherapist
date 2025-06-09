@@ -10,11 +10,9 @@ import SummaryScreen from './screens/SummaryScreen';
 import Navbar from './components/Navbar';
 import { handleOnboardingComplete } from './services/handleOnboardingComplete';
 import './App.css';
-import { supabase } from './services/supabase'; // adjust path if different
+import { supabase } from './services/supabase';
 import WelcomeMessageCard from './components/WelcomeMessageCard';
 
-
-// Protected Route wrapper
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
   const [session, setSession] = React.useState(null);
@@ -29,16 +27,10 @@ const ProtectedRoute = ({ children }) => {
     checkSession();
   }, []);
 
-
   if (loading || !sessionChecked) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        Loading...
-      </div>
-    );
+    return <div className="centered">Loading...</div>;
   }
 
-  // Ensure user is truthy and has an id (Supabase may return null for unauthenticated)
   if (!session) {
     return <Navigate to="/login" replace />;
   }
@@ -46,12 +38,17 @@ const ProtectedRoute = ({ children }) => {
   return children;
 };
 
+const PublicRoute = ({ children }) => {
+  const { user, loading } = useAuth();
 
+  if (loading) return <div className="centered">Loading...</div>;
+  if (user) return <Navigate to="/home" replace />;
+  return children;
+};
 
 const InitialRedirect = () => {
   const { user, loading } = useAuth();
   const [target, setTarget] = React.useState(null);
-
 
   React.useEffect(() => {
     const checkNewUser = async () => {
@@ -59,55 +56,22 @@ const InitialRedirect = () => {
         setTarget('/login');
         return;
       }
-
       const { data, error } = await supabase
         .from('users')
         .select('is_new_user')
         .eq('id', user.id)
         .single();
 
-      if (error) {
-        console.error('Error checking user status:', error);
-        setTarget('/home'); // Fallback
-      } else {
-        // Choose one and remove the other
-        setTarget(data.is_new_user ? '/onboarding' : '/home');
-      }
-
+      setTarget(error ? '/home' : (data.is_new_user ? '/onboarding' : '/home'));
     };
-
     checkNewUser();
   }, [user]);
 
   if (loading || !target) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        Loading...
-      </div>
-    );
+    return <div className="centered">Loading...</div>;
   }
 
   return <Navigate to={target} replace />;
-};
-
-
-// Public Route wrapper (redirects to home if already authenticated)
-const PublicRoute = ({ children }) => {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        Loading...
-      </div>
-    );
-  }
-
-  if (user) {
-    return <Navigate to="/home" replace />;
-  }
-
-  return children;
 };
 
 const OnboardingWrapper = () => {
@@ -117,80 +81,32 @@ const OnboardingWrapper = () => {
   );
 };
 
-function App() {
+const InnerApp = () => {
   const location = useLocation();
-  const showNavbar = location.pathname !== '/login' && location.pathname !== '/signup';
+  const showNavbar = !['/login', '/signup'].includes(location.pathname);
 
+  return (
+    <div className="App">
+      {showNavbar && <Navbar />}
+      <Routes>
+        <Route path="/login" element={<PublicRoute><AuthForm mode="signin" /></PublicRoute>} />
+        <Route path="/signup" element={<PublicRoute><AuthForm mode="signup" /></PublicRoute>} />
+        <Route path="/onboarding" element={<ProtectedRoute><OnboardingWrapper /></ProtectedRoute>} />
+        <Route path="/home" element={<ProtectedRoute><HomeScreen /></ProtectedRoute>} />
+        <Route path="/journal" element={<ProtectedRoute><JournalPage /></ProtectedRoute>} />
+        <Route path="/reflect" element={<ProtectedRoute><ReflectionScreen /></ProtectedRoute>} />
+        <Route path="/summary" element={<ProtectedRoute><SummaryScreen /></ProtectedRoute>} />
+        <Route path="/" element={<InitialRedirect />} />
+      </Routes>
+    </div>
+  );
+};
+
+function App() {
   return (
     <AuthProvider>
       <Router>
-        <div className="App">
-          {showNavbar && <Navbar />}
-          <Routes>
-            <Route
-              path="/login"
-              element={
-                <PublicRoute>
-                  <AuthForm mode="signin" />
-                </PublicRoute>
-              }
-            />
-            <Route
-              path="/signup"
-              element={
-                <PublicRoute>
-                  <AuthForm mode="signup" />
-                </PublicRoute>
-              }
-            />
-
-            {/* Protected routes */}
-            <Route
-              path="/onboarding"
-              element={
-                <ProtectedRoute>
-                  <OnboardingWrapper />
-                </ProtectedRoute>
-              }
-            />
-
-            <Route
-
-              path="/home"
-              element={
-                <ProtectedRoute>
-                  <HomeScreen />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/journal"
-              element={
-                <ProtectedRoute>
-                  <JournalPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/reflect"
-              element={
-                <ProtectedRoute>
-                  <ReflectionScreen />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/summary"
-              element={
-                <ProtectedRoute>
-                  <SummaryScreen />
-                </ProtectedRoute>
-              }
-            />
-            <Route path="/" element={<InitialRedirect />} />
-
-          </Routes>
-        </div>
+        <InnerApp />
       </Router>
     </AuthProvider>
   );
