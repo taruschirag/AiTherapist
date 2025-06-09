@@ -1,6 +1,6 @@
 // src/App.js
 import React from 'react';
-import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import AuthForm from './components/Auth/AuthForm';
 import HomeScreen from './screens/HomeScreen';
@@ -118,12 +118,14 @@ const OnboardingWrapper = () => {
 };
 
 function App() {
+  const location = useLocation();
+  const showNavbar = location.pathname !== '/login' && location.pathname !== '/signup';
 
   return (
     <AuthProvider>
       <Router>
         <div className="App">
-          <Navbar />
+          {showNavbar && <Navbar />}
           <Routes>
             <Route
               path="/login"

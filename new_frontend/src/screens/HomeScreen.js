@@ -97,7 +97,7 @@ const HomeScreen = () => {
             accent: 'coral'
         },
         {
-            title: 'Chat with AI Therapist',
+            title: 'Chat with Tranquil',
             description: 'Reflect and receive support from your AI companion.',
             icon: <MessageCircleHeart size={32} strokeWidth={1.75} />,
             route: '/reflect',
