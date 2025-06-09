@@ -65,7 +65,7 @@
   position: fixed;
   top: 1.2rem;
   left: 1.2rem;
-  z-index: 1200; /* <-- Make sure it's above overlay (1100) */
+  z-index: 1200;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -90,7 +90,7 @@
 .navbar-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(177,190,166,0.25); /* soft green overlay */
+  background: rgba(177,190,166,0.25);
   z-index: 1100;
   display: flex;
 }
@@ -99,7 +99,7 @@
   width: 260px;
   max-width: 80vw;
   height: 100vh;
-  background: rgba(177,190,166,0.97); /* soft green, slightly translucent */
+  background: rgba(177,190,166,0.97);
   color: #333;
   box-shadow: 2px 0 16px rgba(0,0,0,0.12);
   padding: 2rem 1.5rem 1.5rem 1.5rem;
@@ -185,7 +185,6 @@
   background: #E0A800;
 }
 
-/* Remove old horizontal navbar styles if present */
 .navbar, .navbar-links, .navbar-logout {
   display: none !important;
 } 

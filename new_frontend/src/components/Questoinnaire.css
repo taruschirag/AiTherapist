@@ -160,7 +160,6 @@
     background-color: #e0a800;
 }
 
-/* Responsive adjustments */
 @media (max-width: 480px) {
     .questionnaire-card {
         padding: 30px 20px;

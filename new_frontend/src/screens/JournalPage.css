@@ -1,39 +1,37 @@
-/* Main container styles with warmer, modern palette */
 .journal-page-container {
   width: 100%;
   min-height: 100vh;
   padding: 20px;
-  background: linear-gradient(135deg, #f8f6f3 0%, #e8e6e0 100%); /* Warm gradient background */
+  background: linear-gradient(135deg, #f8f6f3 0%, #e8e6e0 100%);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
-/* Overall Layout - Modern flexbox approach */
 .journal-page-container.modern {
   display: flex;
   height: calc(100vh - 60px);
   overflow: hidden;
   background: linear-gradient(135deg, #f8f6f3 0%, #e8e6e0 100%);
-  gap: 24px; /* Add gap between sections */
+  gap: 24px;
   padding: 32px;
 }
 
 .journal-canvas-section {
   flex-grow: 1;
-  padding: 40px 48px; /* Increased padding for breathing room */
+  padding: 40px 48px;
   position: relative;
   overflow-y: auto;
   height: 100%;
   box-sizing: border-box;
   background: #ffffff;
-  border-radius: 16px; /* Softer, more modern border radius */
+  border-radius: 16px;
   box-shadow: 
     0 4px 20px rgba(0, 0, 0, 0.08),
-    0 1px 3px rgba(0, 0, 0, 0.05); /* More sophisticated shadow */
+    0 1px 3px rgba(0, 0, 0, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.8);
 }
 
 .calendar-sidebar-section {
-  width: 340px; /* Slightly wider for better proportion */
+  width: 340px;
   flex-shrink: 0;
   padding: 24px;
   background: #ffffff;
@@ -47,40 +45,37 @@
   border: 1px solid rgba(255, 255, 255, 0.8);
 }
 
-/* Journal Canvas - Enhanced typography and spacing */
 .journal-canvas {
   height: 100%;
   width: 100%;
   outline: none;
-  font-size: 18px; /* Increased from 16px for better readability */
-  line-height: 1.7; /* Improved line height for comfort */
-  color: #2d3748; /* Warmer dark color */
+  font-size: 18px;
+  line-height: 1.7;
+  color: #2d3748;
   box-sizing: border-box;
-  caret-color: #667eea; /* Soft blue caret */
-  padding-bottom: 80px; /* More space at bottom */
-  font-family: 'Georgia', 'Times New Roman', serif; /* Serif for more personal feel */
+  caret-color: #667eea;
+  padding-bottom: 80px;
+  font-family: 'Georgia', 'Times New Roman', serif;
 }
 
-/* Enhanced placeholder styling */
 .journal-canvas:empty::before {
   content: attr(data-placeholder);
-  color: #a0aec0; /* Softer placeholder color */
+  color: #a0aec0;
   cursor: text;
   display: block;
   font-style: italic;
   font-size: 18px;
 }
 
-/* Improved overlays with modern design */
 .loading-overlay,
 .saving-indicator {
   position: absolute;
   top: 20px;
   right: 24px;
-  background: rgba(102, 126, 234, 0.95); /* Soft blue background */
+  background: rgba(102, 126, 234, 0.95);
   color: white;
-  padding: 12px 20px; /* More generous padding */
-  border-radius: 24px; /* Pill-shaped */
+  padding: 12px 20px;
+  border-radius: 24px;
   font-size: 14px;
   font-weight: 500;
   z-index: 10;
@@ -94,7 +89,6 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Calendar Container - Modern card design */
 .calendar-container {
   border-radius: 12px;
   padding: 24px;
@@ -103,18 +97,17 @@
   border: 1px solid rgba(226, 232, 240, 0.8);
 }
 
-/* Calendar Header - Enhanced typography */
 .calendar-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px; /* Increased margin */
+  margin-bottom: 24px;
   padding: 0 8px;
 }
 
 .calendar-header span {
   font-weight: 600;
-  font-size: 20px; /* Larger header text */
+  font-size: 20px;
   color: #2d3748;
   font-family: 'Inter', sans-serif;
 }
@@ -141,14 +134,12 @@
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
-/* Calendar Weekdays - Improved styling */
 .calendar-days {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 8px; /* Increased gap */
+  gap: 8px;
 }
 
-/* Weekday headers */
 .calendar-weekday {
   text-align: center;
   font-size: 13px;
@@ -159,15 +150,14 @@
   letter-spacing: 0.5px;
 }
 
-/* Calendar Days - Enhanced interactive design */
 .calendar-day {
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 40px; /* Larger touch targets */
+  height: 40px;
   cursor: pointer;
-  border-radius: 12px; /* Rounded rectangle instead of circle */
-  font-size: 15px; /* Slightly larger text */
+  border-radius: 12px;
+  font-size: 15px;
   font-weight: 500;
   position: relative;
   transition: all 0.2s ease;
@@ -188,7 +178,6 @@
   box-shadow: 0 4px 12px rgba(56, 178, 172, 0.15);
 }
 
-/* Selected day styling */
 .calendar-day.selected {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
@@ -202,14 +191,12 @@
   transform: translateY(-1px);
 }
 
-/* Today indicator */
 .calendar-day.today:not(.selected) {
   border: 2px solid #38b2ac;
   font-weight: 600;
   color: #38b2ac;
 }
 
-/* Entry indicator dots - More prominent */
 .calendar-day.has-entry::after {
   content: '';
   position: absolute;
@@ -228,9 +215,8 @@
   box-shadow: 0 1px 3px rgba(255, 255, 255, 0.3);
 }
 
-/* Enhanced typography for journal content */
 .journal-canvas h1 {
-  font-size: 32px; /* Larger headers */
+  font-size: 32px;
   font-weight: 700;
   margin-bottom: 20px;
   margin-top: 32px;
@@ -260,13 +246,13 @@
 }
 
 .journal-canvas p {
-  margin-bottom: 16px; /* Better paragraph spacing */
+  margin-bottom: 16px;
   color: #2d3748;
 }
 
 .journal-canvas blockquote {
   border-left: 4px solid #667eea;
-  padding-left: 20px; /* Increased padding */
+  padding-left: 20px;
   margin: 24px 0;
   color: #4a5568;
   font-style: italic;
@@ -285,16 +271,15 @@
 
 .journal-canvas ul,
 .journal-canvas ol {
-  padding-left: 28px; /* More indentation */
+  padding-left: 28px;
   margin-bottom: 20px;
 }
 
 .journal-canvas li {
-  margin-bottom: 10px; /* Better list spacing */
+  margin-bottom: 10px;
   line-height: 1.6;
 }
 
-/* Responsive improvements */
 @media (max-width: 768px) {
   .journal-page-container.modern {
     flex-direction: column;
@@ -311,16 +296,16 @@
   
   .calendar-sidebar-section {
     width: 100%;
-    order: -1; /* Calendar on top on mobile */
+    order: -1;
   }
   
   .journal-canvas {
-    font-size: 16px; /* Slightly smaller on mobile */
+    font-size: 16px;
     line-height: 1.6;
   }
   
   .calendar-day {
-    height: 36px; /* Smaller on mobile */
+    height: 36px;
     font-size: 14px;
   }
   
@@ -329,7 +314,6 @@
   }
 }
 
-/* Focus states for accessibility */
 .calendar-day:focus {
   outline: 2px solid #667eea;
   outline-offset: 2px;
@@ -342,7 +326,6 @@
     0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-/* Subtle animations for better UX */
 .journal-canvas-section,
 .calendar-sidebar-section {
   animation: slideIn 0.4s ease-out;
@@ -359,7 +342,6 @@
   }
 }
 
-/* Remove old unused styles */
 .journal-section,
 .journal-header,
 .journal-input-area,
