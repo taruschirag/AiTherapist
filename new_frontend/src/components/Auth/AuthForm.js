@@ -42,7 +42,7 @@ const AuthForm = ({ mode }) => {
         <div className="login-screen">
             <div className="login-container">
                 <div className="login-header">
-                    <h1>Mindful Reflections</h1>
+                    <h1>Tranquil</h1>
                     <p>Your AI Companion for Self-Growth</p>
                 </div>
 

@@ -17,8 +17,20 @@ import WelcomeMessageCard from './components/WelcomeMessageCard';
 // Protected Route wrapper
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
+  const [session, setSession] = React.useState(null);
+  const [sessionChecked, setSessionChecked] = React.useState(false);
 
-  if (loading) {
+  React.useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setSession(session);
+      setSessionChecked(true);
+    };
+    checkSession();
+  }, []);
+
+
+  if (loading || !sessionChecked) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
         Loading...
@@ -26,15 +38,14 @@ const ProtectedRoute = ({ children }) => {
     );
   }
 
-
-  // change back later
-
-  if (!user) {
+  // Ensure user is truthy and has an id (Supabase may return null for unauthenticated)
+  if (!session) {
     return <Navigate to="/login" replace />;
   }
 
   return children;
 };
+
 
 
 const InitialRedirect = () => {
